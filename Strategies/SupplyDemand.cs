@@ -20,6 +20,7 @@ using NinjaTrader.NinjaScript;
 using NinjaTrader.Core.FloatingPoint;
 using NinjaTrader.NinjaScript.Indicators;
 using NinjaTrader.NinjaScript.DrawingTools;
+using System.Windows.Media.Converters;
 #endregion
 
 
@@ -51,8 +52,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private RelativeVolumeNT8 RVOL;
 		private RSI rSI1m;
 		private RSI rSI30m;
+		private RSI rSI10m;
 		private LinRegSlope LRSDaily;
+		private LinRegSlope LRS5p;
 		private SMA sma1;
+		private SMA sma20;
+		private SMA sma50;
 		private LinRegSlope LRS;
 		public List<PositionManager> PPManager;
 
@@ -93,7 +98,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 		double longRSIStopPercent = 0.01;
 		double longRSILimitPercent = 0.045;
 		string currentOrderClassification = "";
-		bool hasOrderBeenAdjusted = false;
+		bool hasLongRSIOrderBeenAdjusted = false;
+		bool hasGenericProtectionOrderBeenAdjusted = false;
+		bool hasPriorityOrderBeenAdjusted = false;
+		bool useSmaLineAsLongStopLoss = false;
 		bool CancelOCOAndExitLongOrder = false;
 		bool CancelOCOAndExitShortOrder = false;
 		ZONE orderZone;
@@ -108,6 +116,18 @@ namespace NinjaTrader.NinjaScript.Strategies
 		bool cfa = false;
 		double[] IsGap = { 0.0, 0.0, 0.0 }; //   Gap type(0=none1=up2=down) , last price , this price
 		double PriceAdjustedDailySMASlope = 0;
+
+		// Protection order variables
+		/*
+		double overBoughtRsiHighPriorityStopPercent = 0.0036;
+		double overBoughtRsiLowPriorityStopPercent = 0.0034;
+		double overBoughtRsiGenericStopPercent = 0.004;
+		double genericLongOrderProtectionPercentThreshold = 0.012;
+		double genericShortOrderProtectionPercentThreshold = 0.0075;
+		double overBoughtRsiPercentAdjustmentThreshold = 72;
+		double overSoldRsiPercentAdjustmentThreshold = 30;
+		*/
+
 
 
 
@@ -277,33 +297,41 @@ namespace NinjaTrader.NinjaScript.Strategies
 				*/
 				// TSLA_04
 
-				AreaStrengthMultiplier = 2500;
-				TimeThreshold = 35; // Minutes
-				ProxyStrengthMultiplier = 1500;
-				NewZoneStrength = 10;
+				AreaStrengthMultiplier = 1500;
+				TimeThreshold = 45; // Minutes
+				ProxyStrengthMultiplier = 500;
+				NewZoneStrength = 60;
 				ZoneTimeoutStrength = -1;
-				NewZoneTopMultiplier = 0.0015;
-				NewZoneBottomMultiplier = 0.003;
+				NewZoneTopMultiplier = 0.0045;
+				NewZoneBottomMultiplier = 0.008;
 				ResZoneColor = Brushes.Red;
 				SupZoneColor = Brushes.Green;
 				AmountToBuy = 30000; // $$$
-				LongStrengthThreshold = 75;
-				ShortStrengthThreshold = 30;
+				LongStrengthThreshold = 55;
+				ShortStrengthThreshold = 50;
 				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 150;
-				BreakStrengthMultiplier = -1600;
+				ZoneStrengthOrderScale = 100;
+				BreakStrengthMultiplier = -2200;
 				UseVolAccumulation = true;
 				ShortStopLossPercent = 0.6;
 				LongStopLossPercent = 1.3;
-				ShortProfitPercent = 1.7;
-				LongProfitPercent = 2.9;
+				ShortProfitPercent = 1.5;
+				LongProfitPercent = 1.7;
 				TradeDelay = 0; //minutes
 				DelayExitMinutes = 0;
 				Expiration = 60;
-				MaxMergeCount = 2;
-				MergeThreshold = 0.001;
+				MaxMergeCount = 1;
+				MergeThreshold = 0.007;
 				ScaleHalf = true;
 				PercentOfAccForPosition = 50;
+
+				overBoughtRsiHighPriorityStopPercent = 0.0036;
+				overBoughtRsiLowPriorityStopPercent = 0.0034;
+				overBoughtRsiGenericStopPercent = 0.004;
+				genericLongOrderProtectionPercentThreshold = 0.012;
+				genericShortOrderProtectionPercentThreshold = 0.0075;
+				overBoughtRsiPercentAdjustmentThreshold = 72;
+				overSoldRsiPercentAdjustmentThreshold = 30;
 
 
 
@@ -316,6 +344,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 			{
 				AddDataSeries(BarsPeriodType.Minute, 30); //BarsInProgress = 1
 				AddDataSeries(BarsPeriodType.Day, 1); //BarsInProgress = 2
+				AddDataSeries(BarsPeriodType.Minute, 10); //BarsInProgress = 3
 			}
 
 			else if (State == State.DataLoaded)
@@ -328,7 +357,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 				rSI1m = RSI(14, 3);
 				AddChartIndicator(rSI1m);
 				rSI30m = RSI(BarsArray[1], 14, 7);
+				rSI10m = RSI(BarsArray[3], 14, 7);
 				LRS = LinRegSlope(50);
+				LRS5p = LinRegSlope(5);
+				sma20 = SMA(20);
+				sma50 = SMA(50);
 				LRSDaily = LinRegSlope(BarsArray[2], 20);
 				sessIter = new SessionIterator(Bars);
 
@@ -337,7 +370,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		public int GetShareQuantity()
 		{
-			lock(Account.All)
+			lock (Account.All)
 			{
 				ThisAcc = Account.All.FirstOrDefault(a => a.Name == "Sim101");
 			}
@@ -471,35 +504,41 @@ namespace NinjaTrader.NinjaScript.Strategies
 				count++;
 			}
 
-			if (ScaleHalf && count==2)
+			if (ScaleHalf && count == 2)
 			{
 				currentOrderClassification = "";
-				hasOrderBeenAdjusted = false;
-				count = 0;
-				if(GoLongAfterExit)
-				{
-					GoLong();
-					GoLongAfterExit = false;
-				}
-				else if(GoShortAfterExit)
-				{
-					GoShort();
-					GoShortAfterExit = false;
-				}
-			}
-			else if (ScaleHalf== false && count == 1)
-			{
-				currentOrderClassification = "";
-				hasOrderBeenAdjusted = false;
+				hasLongRSIOrderBeenAdjusted = false;
+				hasGenericProtectionOrderBeenAdjusted = false;
+				hasPriorityOrderBeenAdjusted = false;
+				useSmaLineAsLongStopLoss = false;
 				count = 0;
 				if (GoLongAfterExit)
 				{
-					GoLong();
+					GoLongZone();
 					GoLongAfterExit = false;
 				}
 				else if (GoShortAfterExit)
 				{
-					GoShort();
+					GoShortZone();
+					GoShortAfterExit = false;
+				}
+			}
+			else if (ScaleHalf == false && count == 1)
+			{
+				currentOrderClassification = "";
+				hasLongRSIOrderBeenAdjusted = false;
+				hasGenericProtectionOrderBeenAdjusted = false;
+				hasPriorityOrderBeenAdjusted = false;
+				useSmaLineAsLongStopLoss = false;
+				count = 0;
+				if (GoLongAfterExit)
+				{
+					GoLongZone();
+					GoLongAfterExit = false;
+				}
+				else if (GoShortAfterExit)
+				{
+					GoShortZone();
 					GoShortAfterExit = false;
 				}
 			}
@@ -613,7 +652,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		}
 
-		public void GoShort()
+		public void GoShortZone()
 		{
 			stopPrice = Close[0] + (Close[0] * (ShortStopLossPercent / 100) * orderMultiplier);
 			limitPrice = Close[0] - (Close[0] * (ShortProfitPercent / 100) * orderMultiplier);
@@ -622,13 +661,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 				stopPriceHalf = Close[0] + (Close[0] * (ShortStopLossPercent / 200) * orderMultiplier);
 				limitPriceHalf = Close[0] - (Close[0] * (ShortProfitPercent / 200) * orderMultiplier);
 			}
-			orderZone = ASRZ.GetZone(Close[0]);
-			NewOCO = true;
-			if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) shortOrder = SubmitOrderUnmanaged(0, OrderAction.SellShort, OrderType.Market, shareQuantity, 0, Close[0], ocoString, shortName);
-			currentOrderClassification = "Short ZONE";
+			if (stopPrice <= limitPrice || stopPrice <= Close[0])
+			{
+				if (debugPrint) Print("Short side OCO prices are conflicting, order not submitted");
+			}
+			else
+			{
+				orderZone = ASRZ.GetZone(Close[0]);
+				NewOCO = true;
+				if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) shortOrder = SubmitOrderUnmanaged(0, OrderAction.SellShort, OrderType.Market, shareQuantity, 0, Close[0], ocoString, shortName);
+				currentOrderClassification = "Short ZONE";
+			}
 		}
 
-		public void GoLong()
+		public void GoLongZone()
 		{
 			stopPrice = Close[0] - (Close[0] * (LongStopLossPercent / 100) * orderMultiplier);
 			limitPrice = Close[0] + (Close[0] * (LongProfitPercent / 100) * orderMultiplier);
@@ -637,10 +683,64 @@ namespace NinjaTrader.NinjaScript.Strategies
 				stopPriceHalf = Close[0] - (Close[0] * (LongStopLossPercent / 200) * orderMultiplier);
 				limitPriceHalf = Close[0] + (Close[0] * (LongProfitPercent / 200) * orderMultiplier);
 			}
-			orderZone = ASRZ.GetZone(Close[0]);
-			NewOCO = true;
-			if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) longOrder = SubmitOrderUnmanaged(0, OrderAction.Buy, OrderType.Market, shareQuantity, 0, Close[0], ocoString, longName);
-			currentOrderClassification = "Long ZONE";
+			if (stopPrice >= limitPrice || stopPrice >= Close[0])
+			{
+				if (debugPrint) Print("Long side OCO prices are conflicting, order not submitted");
+			}
+			else
+			{
+				orderZone = ASRZ.GetZone(Close[0]);
+				NewOCO = true;
+				if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) longOrder = SubmitOrderUnmanaged(0, OrderAction.Buy, OrderType.Market, shareQuantity, 0, Close[0], ocoString, longName);
+				currentOrderClassification = "Long ZONE";
+			}
+
+		}
+
+		
+		public void GoShortSMACross()
+		{
+			stopPrice = Close[0] + (Close[0] * (0.095 / 100) * orderMultiplier);
+			limitPrice = Close[0] - (Close[0] * (0.24 / 100) * orderMultiplier);
+			if (ScaleHalf)
+			{
+				stopPriceHalf = Close[0] + (Close[0] * (0.06 / 100) * orderMultiplier);
+				limitPriceHalf = Close[0] - (Close[0] * (0.085 / 100) * orderMultiplier);
+				double i = 1.1;
+				while (limitPrice >= Close[0])
+				{
+					limitPrice = limitPrice / i;
+					i *= i;
+				}
+				i = 1.1;
+				while (limitPriceHalf >= Close[0])
+				{
+					limitPriceHalf = limitPriceHalf / i;
+					i *= i;
+				}
+				if (stopPriceHalf <= limitPriceHalf || stopPriceHalf <= Close[0])
+				{
+					if (debugPrint) Print("Short SMA cross OCO prices are conflicting, order not submitted");
+					i = 1.1;
+					while (stopPriceHalf <= limitPriceHalf || stopPriceHalf <= Close[0])
+					{
+						stopPriceHalf = stopPriceHalf * i;
+						i *= i;
+					}
+				}
+			}
+			if (stopPrice <= limitPrice || stopPrice <= Close[0] || stopPriceHalf <= limitPriceHalf || stopPriceHalf <= Close[0] || limitPrice >= Close[0] || limitPriceHalf >= Close[0] || stopPrice <= Bars.GetAsk(CurrentBar+1) || stopPriceHalf <= Bars.GetAsk(CurrentBar + 1))
+			{
+				Print("Short SMA cross OCO prices are conflicting, order not submitted");
+			}
+			else
+			{
+				Print(limitPrice + " " + limitPriceHalf + " " + stopPrice + " " + stopPriceHalf + " " + Close[0]);
+				orderZone = ASRZ.GetZone(Close[0]);
+				NewOCO = true;
+				if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) shortOrder = SubmitOrderUnmanaged(0, OrderAction.SellShort, OrderType.Market, shareQuantity, 0, Close[0], ocoString, shortName);
+				currentOrderClassification = "Short SMA Cross";
+			}
 		}
 
 
@@ -658,11 +758,77 @@ namespace NinjaTrader.NinjaScript.Strategies
 				return;
 
 
-			if (BarsInProgress==2)
+
+
+
+			
+			if (BarsInProgress == 3)
 			{
-				LRSDaily.Update();
-				PriceAdjustedDailySMASlope = (LRSDaily[0] / Close[0]) * 10;
-				Print(PriceAdjustedDailySMASlope); // price-adjusted slope
+
+				rSI10m.Update();
+				// If the 10m RSI is oversold 
+				if (CurrentBars[3] > rSI10m.Period-1)
+				{
+					if (longOrder != null && currentOrderClassification == "Long ZONE" && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
+					{
+						if (rSI10m[0] > overBoughtRsiPercentAdjustmentThreshold && Close[0] > Open[0])
+						{
+							if (ScaleHalf)
+							{
+								if (stopOrderHalf != null )
+								{
+									stopPriceHalf = (Open[0] - Open[0] * overBoughtRsiHighPriorityStopPercent); // overbought RSI protection high
+									ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
+								}
+								stopPrice = Open[0] - Open[0] * overBoughtRsiLowPriorityStopPercent; // overbought RSI protection low
+								ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
+							}
+							else
+							{
+								stopPrice = Open[0] - Open[0] * overBoughtRsiGenericStopPercent; // overbought RSI protection generic
+								ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+							}
+							if (debugPrint) Print("Adjusting long OCO, 10m RSI overbought protection");
+							hasPriorityOrderBeenAdjusted = true;
+						}
+					}
+
+					if (shortOrder != null && currentOrderClassification == "Short ZONE" && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
+					{
+						if (rSI10m[0] < overSoldRsiPercentAdjustmentThreshold && Close[0] < Open[0])
+						{
+							if (ScaleHalf)
+							{
+								if (stopOrderHalf != null)
+								{
+									stopPriceHalf = (Open[0] + Open[0] * overBoughtRsiHighPriorityStopPercent);
+									ChangeOrder(stopOrderHalf, shortOrder.Quantity / 2, 0, stopPriceHalf);
+								}
+								stopPrice = Open[0] + Open[0] * overBoughtRsiLowPriorityStopPercent;
+								ChangeOrder(stopOrder, shortOrder.Quantity / 2, 0, stopPrice);
+							}
+							else
+							{
+								stopPrice = Open[0] + Open[0] * overBoughtRsiGenericStopPercent;
+								ChangeOrder(stopOrder, shortOrder.Quantity, 0, stopPrice);
+							}
+							if (debugPrint) Print("Adjusting short OCO, 10m RSI oversold protection");
+							hasPriorityOrderBeenAdjusted = true;
+						}
+					}
+				}
+			}
+			
+
+
+			if (BarsInProgress == 2)
+			{
+				if (CurrentBars[2] > LRSDaily.Period - 1)
+				{
+					LRSDaily.Update();
+					PriceAdjustedDailySMASlope = (LRSDaily[0] / Close[0]) * 10;
+					//Print(PriceAdjustedDailySMASlope); // price-adjusted slope
+				}
 			}
 
 			if (BarsInProgress == 1)
@@ -679,7 +845,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					if (rSI30m[0] < 26 && Position.MarketPosition == MarketPosition.Flat)
 					{
 						shareQuantity = GetShareQuantity();
-						double tempRVol=0;
+						double tempRVol = 0;
 						int rsiLookBackTime = 30;
 						if (CurrentBar > rsiLookBackTime)
 						{
@@ -692,11 +858,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 						limitPrice = Close[0] + (Close[0] * longRSILimitPercent);
 						if (ScaleHalf)
 						{
-							stopPriceHalf = Close[0] - (Close[0] * longRSIStopPercent/2);
-							limitPriceHalf = Close[0] + (Close[0] * longRSILimitPercent/2);
+							stopPriceHalf = Close[0] - (Close[0] * longRSIStopPercent / 2);
+							limitPriceHalf = Close[0] + (Close[0] * longRSILimitPercent / 2);
 						}
 						NewOCO = true;
-						if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds)  longOrder = SubmitOrderUnmanaged(0, OrderAction.Buy, OrderType.Market, shareQuantity, 0, Close[0], ocoString, "Long");
+						if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) longOrder = SubmitOrderUnmanaged(0, OrderAction.Buy, OrderType.Market, shareQuantity, 0, Close[0], ocoString, "Long");
 						currentOrderClassification = "Long RSI";
 					}
 					// not shorting overbought RSI because the stocks are generally BULLISH and we'd die.
@@ -708,6 +874,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 			if (BarsInProgress == 0)
 			{
 
+
+				// Session iterator stuff
 				if (IsFirstTickOfBar && Bars.IsFirstBarOfSession)
 				{
 
@@ -726,7 +894,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 						IsGap[1] = High[1];
 						IsGap[2] = Low[0];
 					}
-						
+
 					else if (High[0] < Low[1])
 					{
 						Draw.Rectangle(this, "Gap down" + CurrentBar, 0, High[0], 1, Low[1], Brushes.IndianRed);
@@ -736,14 +904,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 					}
 				}
 
-				if ((sessEnd - Time[0]).TotalSeconds <= sessionEndSeconds && Position.MarketPosition != MarketPosition.Flat && cfa==false)
+				if ((sessEnd - Time[0]).TotalSeconds <= sessionEndSeconds && Position.MarketPosition != MarketPosition.Flat && cfa == false)
 				{
 					if (debugPrint) Print((sessEnd - Time[0]).TotalSeconds + " until session end.");
 					CancelAndFlattenAll();
 				}
 
-
-				//Print("STRAT 2");
 				if (CurrentBar >= 0)
 				{
 
@@ -752,11 +918,34 @@ namespace NinjaTrader.NinjaScript.Strategies
 					{
 
 
-
+						if (useSmaLineAsLongStopLoss)
+						{
+							stopPrice = sma20[0];
+							if (stopPrice >= Close[0])
+							{
+								stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+							}
+							if (ScaleHalf)
+							{
+								stopPriceHalf = sma50[0];
+								if (stopPriceHalf >= Close[0])
+								{
+									stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
+								}
+								ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
+								ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
+							}
+							else
+							{
+								ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+							}
+							//ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+						}
+						// Generic order OCO exit handling to make sure we keep some profits on the table
 						// Checking longs and shorts if they need to be exited
 						// Manage open RSI orders
 						// If RSI limit order goes above certain percent, raise the stop to breakeven
-						if (longOrder != null && currentOrderClassification == "Long RSI" && limitOrder != null && stopOrder != null && hasOrderBeenAdjusted == false)
+						if (longOrder != null && currentOrderClassification == "Long RSI" && limitOrder != null && stopOrder != null && hasLongRSIOrderBeenAdjusted == false)
 						{
 							//Print("a");
 							if (Close[0] > ((longOrder.AverageFillPrice + (longOrder.AverageFillPrice * longRSILimitPercent)) + longOrder.AverageFillPrice) / 2)
@@ -764,20 +953,125 @@ namespace NinjaTrader.NinjaScript.Strategies
 								//Print("b");
 								if (ScaleHalf)
 								{
-									stopPriceHalf = (longOrder.AverageFillPrice);
-									ChangeOrder(stopOrderHalf, longOrder.Quantity/2, 0, stopPriceHalf);
+									if (stopOrderHalf !=null)
+									{
+										stopPriceHalf = (longOrder.AverageFillPrice);
+										ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
+									}
 									stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
-									ChangeOrder(stopOrder, longOrder.Quantity/2, 0, stopPrice);
+									ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
 								}
 								else
 								{
 									stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
 									ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
 								}
-								hasOrderBeenAdjusted = true;
+								if (debugPrint) Print("Adjusting long RSI OCO");
+								hasLongRSIOrderBeenAdjusted = true;
 							}
 
 						}
+
+						if (longOrder != null && currentOrderClassification == "Long ZONE" && limitOrder != null && stopOrder != null && useSmaLineAsLongStopLoss == false && CurrentBar > sma20.Period-1 && CurrentBar > sma50.Period-1)
+						{
+							if (Close[0] > longOrder.AverageFillPrice + longOrder.AverageFillPrice * genericLongOrderProtectionPercentThreshold)
+							{
+
+								if (ScaleHalf)
+								{
+									if (stopOrderHalf != null)
+									{
+										//stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
+										stopPriceHalf = sma50[0];
+										if (stopPriceHalf >= Close[0])
+										{
+											stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
+										}
+										ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
+									}
+
+									useSmaLineAsLongStopLoss = true;
+									stopPrice = sma20[0];
+									if (stopPrice >= Close[0])
+									{
+										stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+									}
+									ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
+								}
+								else
+								{
+									useSmaLineAsLongStopLoss = true;
+									stopPrice = sma20[0];
+									if (stopPrice >= Close[0])
+									{
+										stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+									}
+									ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+								}
+								if (debugPrint) Print("Adjusting long overbought protection SMA20 OCO");
+							}
+
+						}
+
+						/*
+						// Generic profit protection order, lowest priority order adjustment
+						if (longOrder != null && currentOrderClassification == "Long ZONE" && limitOrder != null && stopOrder != null && hasGenericProtectionOrderBeenAdjusted == false)
+						{
+							if (Close[0] > longOrder.AverageFillPrice + longOrder.AverageFillPrice * genericLongOrderProtectionPercentThreshold)
+							{
+
+								if (ScaleHalf)
+								{
+									if (stopOrderHalf != null)
+									{
+										stopPriceHalf = (longOrder.AverageFillPrice);
+										ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
+									}
+									stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+									ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
+								}
+								else
+								{
+									stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+									ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+								}
+								if (debugPrint) Print("Adjusting long overbought protection RSI OCO");
+								hasGenericProtectionOrderBeenAdjusted = true;
+							}
+
+						}
+						*/
+						/*
+						// Short side
+						if (shortOrder != null && currentOrderClassification == "Short ZONE" && limitOrder != null && stopOrder != null && hasGenericProtectionOrderBeenAdjusted == false)
+						{
+							if (Close[0] < shortOrder.AverageFillPrice - shortOrder.AverageFillPrice * genericShortOrderProtectionPercentThreshold)
+							{
+								if (ScaleHalf)
+								{
+									if (stopOrderHalf !=null)
+									{
+										stopPriceHalf = (shortOrder.AverageFillPrice);
+										ChangeOrder(stopOrderHalf, shortOrder.Quantity / 2, 0, stopPriceHalf);
+									}
+									stopPrice = (Close[0] - shortOrder.AverageFillPrice) / 2;
+									ChangeOrder(stopOrder, shortOrder.Quantity / 2, 0, stopPrice);
+								}
+								else
+								{
+									stopPrice = (Close[0] - shortOrder.AverageFillPrice) / 2;
+									ChangeOrder(stopOrder, shortOrder.Quantity, 0, stopPrice);
+								}
+								if (debugPrint) Print("Adjusting short oversold protection RSI OCO");
+								hasGenericProtectionOrderBeenAdjusted = true;
+							}
+
+						}
+						*/
+
+
+
+
 
 						/*
 						else if (longOrder != null && currentOrderClassification == "Long ZONE" && limitOrder != null && stopOrder != null && hasOrderBeenAdjusted == false)
@@ -819,19 +1113,37 @@ namespace NinjaTrader.NinjaScript.Strategies
 						//Print(ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].Direction);
 						//Print(IsLong);
 						//Print(ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].Strength + " " + ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].Direction);
-					
+
 						//Print(PositionCount);
 						//if (Position.MarketPosition == MarketPosition.Long && Position.Quantity < EntriesPerDirection &&   ( Bars.GetClose(CurrentBar) >= )   ) EnterLong(shareQuantity*(1/4), "Support entry")
+
+
+
+
+						if (CurrentBar > sma20.Period - 1 && CurrentBar > sma50.Period - 1)
+						{
+							if (sma20[1] > sma50[1] && sma20[0] < sma50[0])
+							{
+								if (Position.MarketPosition == MarketPosition.Flat)
+								{
+									shareQuantity = GetShareQuantity();
+									GoShortSMACross();
+								}
+							}
+						}
+
+
+
 
 						if (UseZoneStrengthOrderMultiplier)
 						{
 							orderMultiplier = Math.Floor(ZoneStrengthOrderScale * Math.Log(ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Strength + 1)) / 100;
 						}
 						//Print(Position.Quantity + " " + Position.MarketPosition);
-						double LST = LongStrengthThreshold + (LongStrengthThreshold  * (- PriceAdjustedDailySMASlope));
+						double LST = LongStrengthThreshold + (LongStrengthThreshold * (-PriceAdjustedDailySMASlope));
 						double STT = ShortStrengthThreshold + (ShortStrengthThreshold * (-PriceAdjustedDailySMASlope));
 
-						Print(LST + " L | S " + STT);
+						//Print(LST + " L | S " + STT);
 						if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Strength > LST && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Direction < 0 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Inflection == "U")
 						{
 							//Print((Bars.GetTime(CurrentBar) - Bars.GetTime(CurrentBar - BarsSinceEntryExecution())).Minutes);
@@ -847,7 +1159,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 								{
 									if (limitOrder != null)
 										ChangeOrder(limitOrder, limitOrder.Quantity, Close[0], 0);
-									if (limitOrderHalf !=null)
+									if (limitOrderHalf != null)
 										ChangeOrder(limitOrderHalf, limitOrderHalf.Quantity, Close[0], 0);
 								}
 								else
@@ -861,7 +1173,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 							else if (Position.MarketPosition == MarketPosition.Flat)
 							{
 								shareQuantity = GetShareQuantity();
-								GoLong();
+								GoLongZone();
 							}
 
 						}
@@ -891,21 +1203,24 @@ namespace NinjaTrader.NinjaScript.Strategies
 							else if (Position.MarketPosition == MarketPosition.Flat)
 							{
 								shareQuantity = GetShareQuantity();
-								GoShort();
+								GoShortZone();
 							}
 							else
 							{
 								//Print("A position is already open");
 							}
 						}
+						
 						/*
-						if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].NumFullTradingDays > 30 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].ZonesAbove == 0 && rSI1m[0] < 60 && LRS[0] > 0 && Position.MarketPosition == MarketPosition.Flat)
+						if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].NumFullTradingDays > 30 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].ZonesAbove == 0 && LRS[0] > 0 && Position.MarketPosition == MarketPosition.Flat)
 						{
-							OrderEntry(1, shareQuantity, "Long entry NO RES", CurrentBar, "BULL");
+							shareQuantity = GetShareQuantity();
+							GoLong();
 						}
-						else if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].NumFullTradingDays > 30 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].ZonesBelow == 0 && rSI1m[0] > 40 && LRS[0] < 0 && Position.MarketPosition == MarketPosition.Short)
+						else if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].NumFullTradingDays > 30 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].ZonesBelow == 0 && LRS[0] < 0 && Position.MarketPosition == MarketPosition.Flat)
 						{
-							OrderEntry(3, shareQuantity, "Short entry NO SUP", CurrentBar, "BEAR");
+							shareQuantity = GetShareQuantity();
+							GoShort();
 						}
 						*/
 						//Print(stopOrder);
@@ -1114,6 +1429,54 @@ namespace NinjaTrader.NinjaScript.Strategies
 		[Display(Name = "% acc to use for pos", Description = "% acc to use for pos", Order = 27, GroupName = "Parameters")]
 		public double PercentOfAccForPosition
 		{ get; set; }
+
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "overBoughtRsiHighPriorityStopPercent", Description = "overBoughtRsiHighPriorityStopPercent", Order = 28, GroupName = "Parameters")]
+		public double overBoughtRsiHighPriorityStopPercent
+		{ get; set; }
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "overBoughtRsiLowPriorityStopPercent", Description = "overBoughtRsiLowPriorityStopPercent", Order = 29, GroupName = "Parameters")]
+		public double overBoughtRsiLowPriorityStopPercent
+		{ get; set; }
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "overBoughtRsiGenericStopPercent", Description = "overBoughtRsiGenericStopPercent", Order = 30, GroupName = "Parameters")]
+		public double overBoughtRsiGenericStopPercent
+		{ get; set; }
+
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "genericLongOrderProtectionPercentThreshold", Description = "genericLongOrderProtectionPercentThreshold", Order = 31, GroupName = "Parameters")]
+		public double genericLongOrderProtectionPercentThreshold
+		{ get; set; }
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "genericShortOrderProtectionPercentThreshold", Description = "genericShortOrderProtectionPercentThreshold", Order = 32, GroupName = "Parameters")]
+		public double genericShortOrderProtectionPercentThreshold
+		{ get; set; }
+
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "overBoughtRsiPercentAdjustmentThreshold", Description = "overBoughtRsiPercentAdjustmentThreshold", Order = 33, GroupName = "Parameters")]
+		public double overBoughtRsiPercentAdjustmentThreshold
+		{ get; set; }
+
+
+		[NinjaScriptProperty]
+		[Range(0, 100)]
+		[Display(Name = "overSoldRsiPercentAdjustmentThreshold", Description = "overSoldRsiPercentAdjustmentThreshold", Order = 34, GroupName = "Parameters")]
+		public double overSoldRsiPercentAdjustmentThreshold
+		{ get; set; }
+
+
 
 
 

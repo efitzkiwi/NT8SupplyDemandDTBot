@@ -127,10 +127,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public bool OverlapCheck { get; set; }
 		public double GetStrength()
 		{
-			
+
 			if (Strength < 0) return 0;
 			return Math.Truncate(Strength * 100) / 100;
-			
+
 		}
 		public void SetStrength(double st)
 		{
@@ -190,9 +190,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private double RelativeStrength;
 		public double GetRelativeStrength(NinjaScriptBase t)
 		{
-			RelativeStrength = (TotalAbsoluteVolume / ((t.Bars.GetTime(t.CurrentBar) - ZoneLeftX).TotalMinutes)) / (ConsecutiveBounces+1);
+			//RelativeStrength = (TotalAbsoluteVolume / ((t.Bars.GetTime(t.CurrentBar) - ZoneLeftX).TotalMinutes)) / ((ConsecutiveBounces + 1) * TotalTimesBroken);
+			RelativeStrength = (TotalAbsoluteVolume / ((t.Bars.GetTime(t.CurrentBar) - ZoneLeftX).TotalMinutes)) / ((ConsecutiveBounces + 1));
 			// Equation option 1
-			double a = 50 / (Math.PI / 2);
+			//double a = 50 / (Math.PI / 2);
 			//double calc = a * Math.Atan((1 / (2 * a)) * (RelativeStrength - 100)) + 50;
 
 			// Equation option 2
@@ -906,11 +907,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 					// High percent of zones above the price means the stock is bearish, and vice versa
 					// if the last bar is being scanned
 
-					if (zones[i].ZoneBottomY > Close[0] && zones[i].Expired == false)
+					if ((zones[i].ZoneBottomY > Close[0] || zones[i].ZoneTopY > Close[0]) && zones[i].Expired == false)
 					{
 						zonesAboveTemp++;
 					}
-					else if (zones[i].ZoneTopY < Close[0] && zones[i].Expired == false)
+					else if ((zones[i].ZoneTopY < Close[0] || zones[i].ZoneBottomY < Close[0])  && zones[i].Expired == false)
 					{
 						zonesBelowTemp++;
 					}
@@ -931,9 +932,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 					if (z[i].Direction == 1) area = ResZoneColor;
 					else if (z[i].Direction == -1) area = SupZoneColor;
 					else area = Brushes.Yellow;
-					Draw.Rectangle(this, "Zone ID: " + z[i].ID.ToString(), true, z[i].ZoneLeftX, z[i].ZoneBottomY, z[i].ZoneRightX, z[i].ZoneTopY, outline, area, Convert.ToInt32(z[i].GetRelativeStrength(this)), true);
+					Draw.Rectangle(this, "Zone ID: " + z[i].ID.ToString(), true, z[i].ZoneLeftX, z[i].ZoneBottomY, z[i].ZoneRightX, z[i].ZoneTopY, outline, area, Convert.ToInt32(z[i].GetRelativeStrength(this)/10), true);
 					// Draw text for absolute volume inside zone, basically a scuffed volume profile indicator
-					Draw.Text(this, zones[i].ID.ToString(), zones[i].TotalAbsoluteVolume.ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
+					Draw.Text(this, zones[i].ID.ToString(), zones[i].GetRelativeStrength(this).ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
 				}
 				double mul = 0;
 				if (zonesAboveTemp > 0.5)
