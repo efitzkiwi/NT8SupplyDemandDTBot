@@ -159,145 +159,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 // See the Help Guide for additional information
                 IsInstantiatedOnEachOptimizationIteration = true;
 
-                // Indicator
-
-
-                // Genetic optimal profit factor test values (4.41) !!!
-
-                /*
-				AreaStrengthMultiplier = 6000;
-				TimeThreshold = 30; // Minutes
-				ProxyStrengthMultiplier = 2000;
-				NewZoneStrength = 80;
-				ZoneTimeoutStrength = -4;
-				NewZoneTopMultiplier = 0.0001;
-				NewZoneBottomMultiplier = 0.0001;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 10000; // $$$
-				LongStrengthThreshold = 80;
-				ShortStrengthThreshold = 50;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 140;
-				BreakStrengthMultiplier = -4700;
-				UseVolAccumulation = true;
-				*/
-
-                // What I think the optimal numbers are
-                /*
-				AreaStrengthMultiplier = 2000;
-				TimeThreshold = 30; // Minutes
-				ProxyStrengthMultiplier = 1000;
-				NewZoneStrength = 70;
-				ZoneTimeoutStrength = -1;
-				NewZoneTopMultiplier = 0.0006;
-				NewZoneBottomMultiplier = 0.0006;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 10000; // $$$
-				LongStrengthThreshold = 35;
-				ShortStrengthThreshold = 35;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 110;
-				BreakStrengthMultiplier = -2500;
-				UseVolAccumulation = true;
-				*/
-                // SPY Current best... HOLY SHIT!!!
-                /*
-				AreaStrengthMultiplier = 4500;
-				TimeThreshold = 30; // Minutes
-				ProxyStrengthMultiplier = 1500;
-				NewZoneStrength = 70;
-				ZoneTimeoutStrength = -3;
-				NewZoneTopMultiplier = 0.0005;
-				NewZoneBottomMultiplier = 0.0007;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 10000; // $$$
-				LongStrengthThreshold = 50;
-				ShortStrengthThreshold = 55;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 170;
-				BreakStrengthMultiplier = -3000;
-				UseVolAccumulation = true;
-				*/
-                // TSLA Current best... HOLY SHIT!!! 21230 max profit
-                /*
-				AreaStrengthMultiplier = 2500;
-				TimeThreshold = 30; // Minutes
-				ProxyStrengthMultiplier = 2000;
-				NewZoneStrength = 50;
-				ZoneTimeoutStrength = 0;
-				NewZoneTopMultiplier = 0.0005;
-				NewZoneBottomMultiplier = 0.0008;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 10000; // $$$
-				LongStrengthThreshold = 60;
-				ShortStrengthThreshold = 35;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 160;
-				BreakStrengthMultiplier = -2800;
-				UseVolAccumulation = true;
-				*/
-                // TSLA damn good 36k profit per month 50k total
-
-                /*
-				AreaStrengthMultiplier = 2000;
-				TimeThreshold = 35; // Minutes
-				ProxyStrengthMultiplier = 2500;
-				NewZoneStrength = 90;
-				ZoneTimeoutStrength = 0;
-				NewZoneTopMultiplier = 0.0028;
-				NewZoneBottomMultiplier = 0.0025;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 20000; // $$$
-				LongStrengthThreshold = 50;
-				ShortStrengthThreshold = 50;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 65;
-				BreakStrengthMultiplier = -1600;
-				UseVolAccumulation = true;
-				ShortStopLossPercent = 0.1;
-				LongStopLossPercent = 0.7;
-				ShortProfitPercent = 0.25;
-				LongProfitPercent = 0.8;
-				TradeDelay = 0; //minutes
-				DelayExitMinutes = 0;
-				Expiration = 30;
-				*/
-
-                // TSLA_04
-                /*
-				AreaStrengthMultiplier = 4000;
-				TimeThreshold = 35; // Minutes
-				ProxyStrengthMultiplier = 2300;
-				NewZoneStrength = 0;
-				ZoneTimeoutStrength = 0;
-				NewZoneTopMultiplier = 0.002;
-				NewZoneBottomMultiplier = 0.005;
-				ResZoneColor = Brushes.Red;
-				SupZoneColor = Brushes.Green;
-				AmountToBuy = 25000; // $$$
-				LongStrengthThreshold = 60;
-				ShortStrengthThreshold = 40;
-				UseZoneStrengthOrderMultiplier = true;
-				ZoneStrengthOrderScale = 100;
-				BreakStrengthMultiplier = -1600;
-				UseVolAccumulation = true;
-				ShortStopLossPercent = 1;
-				LongStopLossPercent = 1.5;
-				ShortProfitPercent = 0.5;
-				LongProfitPercent = 1.6;
-				TradeDelay = 0; //minutes
-				DelayExitMinutes = 0;
-				Expiration = 60;
-				MaxMergeCount = 2;
-				MergeThreshold = 0.001;
-				*/
-                // TSLA_04
-
+                // Indicator vars
                 AreaStrengthMultiplier = 1500;
                 TimeThreshold = 45; // Minutes
                 ProxyStrengthMultiplier = 500;
@@ -333,11 +195,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                 genericShortOrderProtectionPercentThreshold = 0.0075;
                 overBoughtRsiPercentAdjustmentThreshold = 72;
                 overSoldRsiPercentAdjustmentThreshold = 30;
-
-
-
-
-
 
             }
 
@@ -395,8 +252,21 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 if (debugPrint) Print("Long order filled at " + longOrder.AverageFillPrice);
 
+                double i = 1.01;
+                while (stopPrice >= GetCurrentAsk())
+                {
+                    stopPrice /= i;
+                    i *= i;
+                }
+
                 if (ScaleHalf)
                 {
+                    i = 1.01;
+                    while (stopPriceHalf >= GetCurrentAsk())
+                    {
+                        stopPriceHalf /= i;
+                        i *= i;
+                    }
                     string temp = DateTime.Now.ToString("hhmmssffff");
                     ocoString = "LongOCO{1}" + " P: " + execution.OrderId + " T: " + temp;
                     limitOrder = SubmitOrderUnmanaged(0, OrderAction.Sell, OrderType.Limit, execution.Quantity / 2, limitPrice, 0, ocoString, longLimitName);
@@ -427,8 +297,22 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (debugPrint) Print("Short order filled at " + shortOrder.AverageFillPrice);
 
 
+                double i = 1.01;
+                while (stopPrice <= GetCurrentAsk())
+                {
+                    stopPrice *= i;
+                    i *= i;
+                }
+
+
                 if (ScaleHalf)
                 {
+                    i = 1.01;
+                    while (stopPriceHalf <= GetCurrentAsk())
+                    {
+                        stopPriceHalf *= i;
+                        i *= i;
+                    }
                     string temp = DateTime.Now.ToString("hhmmssffff");
                     ocoString = "ShortOCO{1}" + " P: " + execution.OrderId + " T: " + temp;
                     limitOrder = SubmitOrderUnmanaged(0, OrderAction.BuyToCover, OrderType.Limit, execution.Quantity / 2, limitPrice, 0, ocoString, shortLimitName);
@@ -715,13 +599,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
                 if (stopPrice <= limitPrice || stopPrice <= Close[0] || stopPriceHalf <= limitPriceHalf || stopPriceHalf <= Close[0])
                 {
-                    Print("Short SMA cross OCO prices are conflicting, order not submitted");
+                    if (debugPrint) Print("Short SMA cross OCO prices are conflicting, order not submitted");
                 }
                 else
                 {
-                    Print(limitPrice + " " + limitPriceHalf + " " + stopPrice + " " + stopPriceHalf + " " + Close[0]);
+                    if (debugPrint) Print(limitPrice + " " + limitPriceHalf + " " + stopPrice + " " + stopPriceHalf + " " + Close[0]);
                     orderZone = ASRZ.GetZone(Close[0]);
                     NewOCO = true;
+                    //useSmaLineAsLongStopLoss = true;
                     if ((sessEnd - Time[0]).TotalSeconds > sessionEndSeconds) shortOrder = SubmitOrderUnmanaged(0, OrderAction.SellShort, OrderType.Market, shareQuantity, 0, Close[0], ocoString, shortName);
                     currentOrderClassification = "Short SMA Cross";
                 }
@@ -730,9 +615,11 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
         public void TryLongSMACross()
         {
+            
             if (Position.MarketPosition == MarketPosition.Flat)
             {
                 shareQuantity = GetShareQuantity();
+                
                 stopPrice = Close[0] - (Close[0] * (0.09 / 100) * orderMultiplier);
                 limitPrice = Close[0] + (Close[0] * (0.1 / 100) * orderMultiplier);
                 if (ScaleHalf)
@@ -742,11 +629,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
                 if (stopPrice >= limitPrice || stopPrice >= Close[0] || stopPriceHalf >= limitPriceHalf || stopPriceHalf >= Close[0])
                 {
-                    Print("Long SMA cross OCO prices are conflicting, order not submitted");
+                    if (debugPrint) Print("Long SMA cross OCO prices are conflicting, order not submitted");
                 }
                 else
                 {
-                    Print(limitPrice + " " + limitPriceHalf + " " + stopPrice + " " + stopPriceHalf + " " + Close[0]);
+                    if (debugPrint) Print(limitPrice + " " + limitPriceHalf + " " + stopPrice + " " + stopPriceHalf + " " + Close[0]);
                     orderZone = ASRZ.GetZone(Close[0]);
                     NewOCO = true;
                     useSmaLineAsLongStopLoss = true;
@@ -754,6 +641,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     currentOrderClassification = "Long SMA Cross";
                 }
             }
+            
         }
 
 
@@ -790,11 +678,12 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
-        public void Try10mRSIEntry()
+        public void Try10mRSIProfitProtection()
         {
             // If the 10m RSI is oversold 
             if (CurrentBars[3] > rSI10m.Period - 1)
             {
+                
                 if (longOrder != null && currentOrderClassification == "Long ZONE" && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
                 {
                     if (rSI10m[0] > overBoughtRsiPercentAdjustmentThreshold && Close[0] > Open[0])
@@ -818,6 +707,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         hasPriorityOrderBeenAdjusted = true;
                     }
                 }
+                
 
                 if (shortOrder != null && currentOrderClassification == "Short ZONE" && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
                 {
@@ -925,11 +815,15 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
 
-        public void TryUseSMAAsStopLoss(int period, int halfPeriod)
+        public void TryUseSMAAsStopLoss(int period, int halfPeriod, string orderType="Long")
         {
-            if (useSmaLineAsLongStopLoss)
+            if (useSmaLineAsLongStopLoss && CurrentBar > sma20m.Period - 1 && CurrentBar > sma50m.Period - 1 && CurrentBar > sma5m.Period - 1 && CurrentBar > sma6m.Period - 1)
             {
-                switch(period)
+
+                Order refOrder = longOrder;
+                if (orderType=="Short") refOrder = shortOrder;
+                if (refOrder == null) return;
+                switch (period)
                 {
                     case 5:
                         stopPrice = sma5m[0];
@@ -953,7 +847,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
                 if (stopPrice >= Close[0])
                 {
-                    stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
+                    stopPrice = (Close[0] + refOrder.AverageFillPrice) / 2;
                 }
                 if (ScaleHalf)
                 {
@@ -981,14 +875,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                     }
                     if (stopPriceHalf >= Close[0])
                     {
-                        stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
+                        stopPriceHalf = (Close[0] + refOrder.AverageFillPrice) / 2;
                     }
-                    ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
-                    ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
+                    ChangeOrder(stopOrderHalf, refOrder.Quantity / 2, 0, stopPriceHalf);
+                    ChangeOrder(stopOrder, refOrder.Quantity / 2, 0, stopPrice);
                 }
                 else
                 {
-                    ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
+                    ChangeOrder(stopOrder, refOrder.Quantity, 0, stopPrice);
                 }
                 //ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
             }
@@ -1024,41 +918,10 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 if (Close[0] > longOrder.AverageFillPrice + longOrder.AverageFillPrice * genericLongOrderProtectionPercentThreshold)
                 {
-
-                    if (ScaleHalf)
-                    {
-                        if (stopOrderHalf != null)
-                        {
-                            //stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
-                            stopPriceHalf = sma50m[0];
-                            if (stopPriceHalf >= Close[0])
-                            {
-                                stopPriceHalf = (Close[0] + longOrder.AverageFillPrice) / 2;
-                            }
-                            ChangeOrder(stopOrderHalf, longOrder.Quantity / 2, 0, stopPriceHalf);
-                        }
-
-                        useSmaLineAsLongStopLoss = true;
-                        stopPrice = sma20m[0];
-                        if (stopPrice >= Close[0])
-                        {
-                            stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
-                        }
-                        ChangeOrder(stopOrder, longOrder.Quantity / 2, 0, stopPrice);
-                    }
-                    else
-                    {
-                        useSmaLineAsLongStopLoss = true;
-                        stopPrice = sma20m[0];
-                        if (stopPrice >= Close[0])
-                        {
-                            stopPrice = (Close[0] + longOrder.AverageFillPrice) / 2;
-                        }
-                        ChangeOrder(stopOrder, longOrder.Quantity, 0, stopPrice);
-                    }
+                    useSmaLineAsLongStopLoss = true;
+                    TryUseSMAAsStopLoss(20, 50);
                     if (debugPrint) Print("Adjusting long overbought protection SMA20 OCO");
                 }
-
             }
         }
 
@@ -1118,7 +981,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                 rSI10m.Update();
                 // If the 10m RSI is oversold 
-                Try10mRSIEntry();
+                Try10mRSIProfitProtection();
             }
 
 
@@ -1165,8 +1028,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                     {
 
                         // If the order was designated to use an SMA as a stoploss, this function updates the order
+
+                        
                         if (currentOrderClassification == "Long SMA Cross") TryUseSMAAsStopLoss(6, 6);
+                        else if (currentOrderClassification == "Short SMA Cross") TryUseSMAAsStopLoss(6, 6, "Short");
                         else TryUseSMAAsStopLoss(20, 50);
+                        
+
                         // Generic order OCO exit handling to make sure we keep some profits on the table
                         // Checking longs and shorts if they need to be exited
                         // Manage open RSI orders
@@ -1280,7 +1148,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 
 
-                        if (CurrentBar > sma20m.Period - 1 && CurrentBar > sma50m.Period - 1)
+                        if (CurrentBar > sma20m.Period - 1 && CurrentBar > sma50m.Period - 1 && CurrentBar > sma5m.Period - 1 && CurrentBar > sma6m.Period)
                         {
                             if (sma20m[1] > sma50m[1] && sma20m[0] < sma50m[0])
                             {
