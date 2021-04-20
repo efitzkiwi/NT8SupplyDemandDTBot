@@ -541,6 +541,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         public void GoShortZone()
         {
+
             stopPrice = Close[0] + (Close[0] * (ShortStopLossPercent / 100) * orderMultiplier);
             limitPrice = Close[0] - (Close[0] * (ShortProfitPercent / 100) * orderMultiplier);
             if (ScaleHalf)
@@ -1150,11 +1151,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                         if (CurrentBar > sma20m.Period - 1 && CurrentBar > sma50m.Period - 1 && CurrentBar > sma5m.Period - 1 && CurrentBar > sma6m.Period)
                         {
-                            if (sma20m[1] > sma50m[1] && sma20m[0] < sma50m[0])
+                            if (sma20m[1] > sma50m[1] && sma20m[0] < sma50m[0] && rSI1m[0] > 30)
                             {
                                 TryShortSMACross();
                             }
-                            else if (sma5m[1] < sma20m[1] && sma5m[0] > sma20m[0])
+                            else if (sma5m[1] < sma20m[1] && sma5m[0] > sma20m[0] && rSI1m[0] < 85)
                             {
                                 TryLongSMACross();
                             }
