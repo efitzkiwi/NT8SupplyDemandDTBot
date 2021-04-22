@@ -29,6 +29,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private double av;
 		private double sd;
 		private double relVol;
+		private int WideSMAPeriod = 200;
 		
 		protected override void OnStateChange()
 		{
@@ -48,8 +49,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 				//See Help Guide for additional information.
 				IsSuspendedWhileInactive					= true;
 				Period					= 60;
+				SmaPeriod = 20;
 				NumStDev					= 2;
 				AddPlot(new Stroke(Brushes.Black, 2), PlotStyle.Bar, "RelativeVolume");
+				AddPlot(new Stroke(Brushes.Gold, 2), PlotStyle.Line, "MA");
+				AddPlot(new Stroke(Brushes.Firebrick, 2), PlotStyle.Line, "MAWide");
 			}
 		}
 
@@ -61,7 +65,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 				PlotBrushes[0][0] = Brushes.Black;
 			}
 			
-			if (CurrentBar > Period)
+			if (CurrentBar > Period && CurrentBar > SmaPeriod && CurrentBar > WideSMAPeriod)
 			{
 				av = SMA(Volume, Period)[0];
 				sd = StdDev(Volume, Period)[0];
@@ -78,6 +82,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 					Values[0][0] = relVol;
 					PlotBrushes[0][0] = Brushes.DarkGray;
 				}
+				MA[0] = SMA(Values[0], SmaPeriod)[0];
+				MAWide[0] = SMA(Values[0], WideSMAPeriod)[0];
 			}
 		}
 
@@ -88,10 +94,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public int Period
 		{ get; set; }
 
+
 		[NinjaScriptProperty]
 		[Range(1, double.MaxValue)]
 		[Display(Name="NumStDev", Description="Num of StDevs to be significant", Order=2, GroupName="Parameters")]
 		public double NumStDev
+		{ get; set; }
+
+		[NinjaScriptProperty]
+		[Range(1, int.MaxValue)]
+		[Display(Name = "Avg Period", Description = "Avg Number of bars for MA calculation", Order = 3, GroupName = "Parameters")]
+		public int SmaPeriod
 		{ get; set; }
 
 		[Browsable(false)]
@@ -99,6 +112,20 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public Series<double> RelativeVolume
 		{
 			get { return Values[0]; }
+		}
+
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> MA
+		{
+			get { return Values[1]; }
+		}
+
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> MAWide
+		{
+			get { return Values[2]; }
 		}
 		#endregion
 
@@ -112,18 +139,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private RelativeVolumeNT8[] cacheRelativeVolumeNT8;
-		public RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev)
+		public RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev, int smaPeriod)
 		{
-			return RelativeVolumeNT8(Input, period, numStDev);
+			return RelativeVolumeNT8(Input, period, numStDev, smaPeriod);
 		}
 
-		public RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input, int period, double numStDev)
+		public RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input, int period, double numStDev, int smaPeriod)
 		{
 			if (cacheRelativeVolumeNT8 != null)
 				for (int idx = 0; idx < cacheRelativeVolumeNT8.Length; idx++)
-					if (cacheRelativeVolumeNT8[idx] != null && cacheRelativeVolumeNT8[idx].Period == period && cacheRelativeVolumeNT8[idx].NumStDev == numStDev && cacheRelativeVolumeNT8[idx].EqualsInput(input))
+					if (cacheRelativeVolumeNT8[idx] != null && cacheRelativeVolumeNT8[idx].Period == period && cacheRelativeVolumeNT8[idx].NumStDev == numStDev && cacheRelativeVolumeNT8[idx].SmaPeriod == smaPeriod && cacheRelativeVolumeNT8[idx].EqualsInput(input))
 						return cacheRelativeVolumeNT8[idx];
-			return CacheIndicator<RelativeVolumeNT8>(new RelativeVolumeNT8(){ Period = period, NumStDev = numStDev }, input, ref cacheRelativeVolumeNT8);
+			return CacheIndicator<RelativeVolumeNT8>(new RelativeVolumeNT8(){ Period = period, NumStDev = numStDev, SmaPeriod = smaPeriod }, input, ref cacheRelativeVolumeNT8);
 		}
 	}
 }
@@ -132,14 +159,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev)
+		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev, int smaPeriod)
 		{
-			return indicator.RelativeVolumeNT8(Input, period, numStDev);
+			return indicator.RelativeVolumeNT8(Input, period, numStDev, smaPeriod);
 		}
 
-		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input , int period, double numStDev)
+		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input , int period, double numStDev, int smaPeriod)
 		{
-			return indicator.RelativeVolumeNT8(input, period, numStDev);
+			return indicator.RelativeVolumeNT8(input, period, numStDev, smaPeriod);
 		}
 	}
 }
@@ -148,14 +175,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev)
+		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(int period, double numStDev, int smaPeriod)
 		{
-			return indicator.RelativeVolumeNT8(Input, period, numStDev);
+			return indicator.RelativeVolumeNT8(Input, period, numStDev, smaPeriod);
 		}
 
-		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input , int period, double numStDev)
+		public Indicators.RelativeVolumeNT8 RelativeVolumeNT8(ISeries<double> input , int period, double numStDev, int smaPeriod)
 		{
-			return indicator.RelativeVolumeNT8(input, period, numStDev);
+			return indicator.RelativeVolumeNT8(input, period, numStDev, smaPeriod);
 		}
 	}
 }
