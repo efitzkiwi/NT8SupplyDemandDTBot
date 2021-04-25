@@ -592,7 +592,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 							double VolAccumulation = 0;
 							if (UseVolAccumulation)
 							{
-								zones[i].VolAccumulation += RelativeVolumeNT8(TimeThreshold, 2)[0];
+								zones[i].VolAccumulation += RelativeVolumeNT8(TimeThreshold, 2, 30)[0];
 								VolAccumulation = zones[i].VolAccumulation;
 							}
 
