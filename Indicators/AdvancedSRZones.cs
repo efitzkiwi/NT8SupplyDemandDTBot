@@ -241,7 +241,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public void RemoveZone() { }
 	}
 
-	public class LINK
+	public partial class LINK
 	{
 		public double Strength { get; set; }
 		public int Direction { get; set; }
@@ -253,6 +253,30 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public double ZoneBottomY { get; set; }
 		public double AggregateTradeSentiment { get; set; } // 1. Percent of zones above and below 2. Total volume in this area 3. Inflection point occurance 4. Relative volume in this area 5. Relative strength in this area
 
+	}
+
+	public interface ICloneable<T>
+	{
+		T Clone();
+	}
+
+	public partial class LINK : ICloneable<LINK>
+	{
+		public LINK Clone()
+		{
+			return new LINK
+			{
+				Strength = this.Strength,
+				Direction = this.Direction,
+				Inflection = this.Inflection,
+				ZonesAbove = this.ZonesAbove,
+				ZonesBelow = this.ZonesBelow,
+				NumFullTradingDays = this.NumFullTradingDays,
+				ZoneTopY = this.ZoneTopY,
+				ZoneBottomY = this.ZoneBottomY,
+				AggregateTradeSentiment = this.AggregateTradeSentiment
+			};
+		}
 	}
 
 	// Contains a reference of zone statistics for comparison between strengths
@@ -290,10 +314,15 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private double priorSum;
 		private int inflectionOffset = -0;
 
+		private int ZonesAboveToday = -1;
+		private int ZonesBelowToday = -1;
+
 		private List<Double> SMA_l = new List<double>();
 		private List<Double> LRS_SMA = new List<double>();
 
 		public List<LINK> LINKLIST = new List<LINK>();
+		public List<bool> ZonesAboveExtrema = new List<bool>();
+		public List<bool> ZonesBelowExtrema = new List<bool>();
 
 		double zonesAboveTemp = 0;
 		double zonesBelowTemp = 0;
@@ -861,7 +890,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 						}
 					}
 					#endregion
-					// Display bars on 
+					ZonesAboveExtrema.Add(true ? ZonesAboveToday == 0 : false);
+					ZonesBelowExtrema.Add(true ? ZonesBelowToday == 0 : false);
+					ZonesAboveToday = -1;
+					ZonesBelowToday = -1;
 				}
 				MergeZones();
 				zones.ForEach(delegate (ZONE z)
@@ -869,8 +901,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 					z.UpdateEnd(this);
 				});
 				ComputeZones(zones);
-				//Print("TEST");
-
 
 			}
 
@@ -914,6 +944,19 @@ namespace NinjaTrader.NinjaScript.Indicators
 					else if ((zones[i].ZoneTopY < Close[0] || zones[i].ZoneBottomY < Close[0])  && zones[i].Expired == false)
 					{
 						zonesBelowTemp++;
+					}
+					if (zonesAboveTemp == 0)
+					{
+						ZonesAboveToday = 0;
+					}
+					else if (zonesBelowTemp == 0)
+					{
+						ZonesBelowToday = 0;
+					}
+					else
+					{
+						ZonesBelowToday = -1;
+						ZonesAboveToday = -1;
 					}
 					if (i == zones.Count - 1)
 					{
@@ -1071,6 +1114,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 			// restructure zone IDs
 
+		}
+
+		public bool WasZeroResX(int days)
+		{
+			if (ZonesAboveExtrema.Count > 0)
+			{
+				int index = ZonesAboveExtrema.Count - days;
+				if (index < 0) return false;
+				if (ZonesAboveExtrema[index]) return true;
+			}
+			return false;
 		}
 
 		public ZONE GetZone(double price)
