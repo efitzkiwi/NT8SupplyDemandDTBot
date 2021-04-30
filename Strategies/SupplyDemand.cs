@@ -115,6 +115,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         bool usingProfitProtection = false;
         bool CancelOCOAndExitLongOrder = false;
         bool CancelOCOAndExitShortOrder = false;
+        bool ProtectOverlapFromCancelDelayToEnter = false;
         ZONE orderZone;
         bool NewOCO = false;
         int count = 0;
@@ -449,38 +450,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (ScaleHalf && count == 2)
             {
-                ResetHelperVars();
-                count = 0;
-                if (debugPrint) Print(" >>>>>>>>>>>>>>>> F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | ");
-                if (GoLongAfterExit)
-                {
-                    GoLongZone();
-                    GoLongAfterExit = false;
-                }
-                else if (GoShortAfterExit)
-                {
-                    GoShortZone();
-                    GoShortAfterExit = false;
-                }
+                ProtectOverlapFromCancelDelayToEnter = true;
             }
             else if (ScaleHalf == false && count == 1)
             {
-                if (debugPrint) Print(" >>>>>>>>>>>>>>>> F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | ");
-                ResetHelperVars();
-                count = 0;
-                if (GoLongAfterExit)
-                {
-                    GoLongZone();
-                    GoLongAfterExit = false;
-                }
-                else if (GoShortAfterExit)
-                {
-                    GoShortZone();
-                    GoShortAfterExit = false;
-                }
+                ProtectOverlapFromCancelDelayToEnter = true;
             }
-
-
 
         }
 
@@ -544,6 +519,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (debugPrint) Print("ORDER_CANCEL: Limit " + limitOrderHalf.Oco + " cancelled" + " time " + Time[0]);
                 limitOrderHalf = null;
             }
+        
 
             if (stopOrderHalf != null && order == stopOrderHalf && stopOrderHalf.OrderState == OrderState.Accepted)
             {
@@ -586,6 +562,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (debugPrint) Print("ORDER_REJECT: Short order " + shortOrder.Oco + " rejected " + shortOrder + " time " + Time[0]);
             }
 
+            // MAKE SURE WE ARE FLAT AFTER ORDERS ARE CANCELLED
+            if (ProtectOverlapFromCancelDelayToEnter && Position.MarketPosition == MarketPosition.Flat && stopOrder == null && stopOrderHalf == null && limitOrder == null && limitOrderHalf == null)
+            {
+                ProtectOverlapFromCancelDelayToEnter = false;
+                if (debugPrint) Print(" >>>>>>>>>>>>>>>>>>> | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | F L A T | ");
+                TryRequiredExitActions();
+            }
+
 
             // when both orders are cancelled set to null for a new entry
             if ((longOrder != null && longOrder.OrderState == OrderState.Cancelled && shortOrder != null && shortOrder.OrderState == OrderState.Cancelled))
@@ -594,6 +578,24 @@ namespace NinjaTrader.NinjaScript.Strategies
                 shortOrder = null;
             }
         }
+
+
+        public void TryRequiredExitActions()
+        {
+            ResetHelperVars();
+            count = 0;
+            if (GoLongAfterExit)
+            {
+                GoLongZone();
+                GoLongAfterExit = false;
+            }
+            else if (GoShortAfterExit)
+            {
+                GoShortZone();
+                GoShortAfterExit = false;
+            }
+        }
+
 
         public void TryResubmitOCO(Order ord)
         {
