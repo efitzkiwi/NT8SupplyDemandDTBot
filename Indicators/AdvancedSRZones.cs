@@ -91,6 +91,26 @@ Look at ONE day of charting, 5m candles
 Draw your own support and resistance lines that were respected ON THAT DAY only.
 Machines go candle by candle - when the price starts churning inside this zone, the machine must understand CONSOLIDATION
 Consolidation is a flat zone usually no wider than 0.15% of the stock price
+
+
+
+
+
+
+
+
+
+
+
+NEW IDEA:
+
+	Use volume profile to generate zones each day. This can be used in addition to price action for even stronger and more accurate zones. 
+	To prevent clutter, a robust merge system must be implemented. This system will merge zones of close proximity into each other. 
+	While these zones can be powerful, additional technical analysis can be used to make this strategy nearly perfect. 
+		Market depth
+		Market sentiment
+		Candle patterns
+
 */
 
 //This namespace holds Indicators in this folder and is required. Do not change it. 
@@ -292,7 +312,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public class AdvancedSRZones : Indicator
 	{
 		bool debugPrint = false;
-		public int i = 0, j = 0, x = 0;
+		public int iLi = 0, jLi = 0, xLi = 0;
 		int SMALength = 3;
 		// Current low, current high, final high, final low
 		double dayLow = Double.MaxValue, dayHigh = double.MinValue, dayTOP = Double.MinValue, dayBOTTOM = Double.MaxValue;
@@ -317,6 +337,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private int ZonesAboveToday = -1;
 		private int ZonesBelowToday = -1;
 
+		private double[,] priceHitsArray;
+		private Series<double> VolumeGraph;
+
 		private List<Double> SMA_l = new List<double>();
 		private List<Double> LRS_SMA = new List<double>();
 
@@ -327,6 +350,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 		double zonesAboveTemp = 0;
 		double zonesBelowTemp = 0;
 		int numFullTradingDays = 0;
+		int dayStartBar = 0;
+		double slotHalfRange;
+		int rightScrnBnum;
+		int leftScrnBnum;
+		SharpDX.Direct2D1.Brush sessBrush;
+		private Brush slotSessionColor = Brushes.Lime;
+		int TotalSlots = 500;
 
 
 		readonly List<ZONE> zones = new List<ZONE>();
@@ -378,35 +408,36 @@ namespace NinjaTrader.NinjaScript.Indicators
 			{
 				//AddDataSeries(BarsPeriodType.Minute, 1);
 				avg = divisor = myPeriod = priorSumXY = priorSumY = sumX2 = sumY = sumXY = sumSMA = priorSum = 0;
+				priceHitsArray = new double[2, TotalSlots];
+
 			}
 		}
 
 
 		protected override void OnBarUpdate()
 		{
-			//Value[0] = 10;
-			//Print("INDI 1");	
+
 			// Display high and low of each day
+
 
 			if (CurrentBar >= 0)
 			{
-				//Print("INDI 2");
+
+				// Do volume profile stuff
+				DrawVolumeProfileAccessories();
+
 				if (CurrentBar >= 1)
 				{
 					SupportAreaStrengthThreshold = AreaStrengthMultiplier * 5 / Bars.GetClose(CurrentBar);
 					BreakAreaStrengthThreshold = BreakStrengthMultiplier * 5 / Bars.GetClose(CurrentBar);
 				}
+
 				//Print(CurrentBar);
 				if (Bars.IsFirstBarOfSession)
 				{
-					dayTOP = Bars.GetHigh(CurrentBar);
-					dayBOTTOM = Bars.GetLow(CurrentBar);
-					dayHigh = Bars.GetHigh(CurrentBar);
-					dayLow = Bars.GetLow(CurrentBar);
-					dayHighTime = Bars.GetTime(CurrentBar);
-					dayLowTime = Bars.GetTime(CurrentBar);
-					//Draw.Diamond(this, "Day Low: " + dayLow.ToString() + " at " + dayLowTime, true, dayLowTime, dayLow, Brushes.White);
+					ResetSessionVars();
 				}
+
 				//Basic SMA Line for integral calculation
 
 				if (CurrentBar > SMALength)
@@ -481,103 +512,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 					for (int i = 0; i < zones.Count; i++)
 					{
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-						// if (zones[i].OverlapCheck)
-						// {
-						// 	if (Bars.IsFirstBarOfSession) zones[i].BarTracker = CurrentBar;
-						// 	if (zones[i].TestType == "sup")
-						// 	{
-						// 		zones[i].StrengthProxy += ProxyStrengthMultiplier * (SMA_l[SMA_l.Count - 1] - Bars.GetClose(zones[i].BarTracker)) / Bars.GetClose(CurrentBar);
-						// 		//Print(zones[i].StrengthProxy);
-						// 		if (((Bars.GetTime(CurrentBar) - Bars.GetTime(zones[i].BarTracker)).Minutes >= zones[i].CloseOverlap) && zones[i].OverlapCheck)
-						// 		{
-						// 			//Print(zones[i].ID.ToString() + " Sup timed out, strength: " + zones[i].GetStrength() + ", proxy strength: " + zones[i].StrengthProxy + ", Threshold: " + SupportAreaStrengthThreshold.ToString());
-						// 			// The zone failed to maintain the threshold to be considered a "good support" during this time period
-						// 			// Zone adds whatever strength occurred during this time, be it positive or negative as long as it was under the thresholds
-						// 			////*
-						// 			if (Math.Abs(zones[i].StrengthProxy) >= SupportAreaStrengthThreshold)
-						// 			{
-						// 				zones[i].SetStrength(zones[i].StrengthProxy);
-						// 				Draw.Text(this, zones[i].ID + " Sup overlap Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, Bars.GetClose(CurrentBar));
-						// 			}
-						// 			else
-						// 			{
-						// 				// Artificial way of adding "decay" to zones where price keeps on consolidating
-						// 				zones[i].SetStrength(-1);
-						// 				Print("Strikeout! Overlap sup");
-						// 				Draw.Text(this, zones[i].ID + " Strikeout overlap Sup Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, Bars.GetClose(CurrentBar));
-						// 			}
-
-
-						// 			zones[i].Tracked = false;
-						// 			zones[i].OverlapCheck = false;
-						// 			zones[i].BarTracker = 0;
-						// 			zones[i].TestType = "";
-						// 			zones[i].StrengthProxy = 0;
-
-						// 		}
-
-						// 		// sma line minus zero line at the open
-						// 	}
-						// 	else if (zones[i].TestType == "res")
-						// 	{
-						// 		zones[i].StrengthProxy += ProxyStrengthMultiplier * (Bars.GetClose(zones[i].BarTracker) - SMA_l[SMA_l.Count - 1]) / Bars.GetClose(CurrentBar);
-						// 		//Print(zones[i].StrengthProxy);
-						// 		if (((Bars.GetTime(CurrentBar) - Bars.GetTime(zones[i].BarTracker)).Minutes >= zones[i].CloseOverlap) && zones[i].OverlapCheck)
-						// 		{
-						// 			//Print(zones[i].ID.ToString() + " Res timed out, strength: " + zones[i].GetStrength() + ", proxy strength: " + zones[i].StrengthProxy + ", Threshold: " + SupportAreaStrengthThreshold.ToString());
-						// 			// The zone failed to maintain the threshold to be considered a "good support" during this time period
-						// 			// Zone adds whatever strength occurred during this time, be it positive or negative as long as it was under the thresholds
-						// 			if (Math.Abs(zones[i].StrengthProxy) >= SupportAreaStrengthThreshold)
-						// 			{
-						// 				zones[i].SetStrength(zones[i].StrengthProxy);
-						// 				Draw.Text(this, zones[i].ID + "  res Overlap Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, Bars.GetClose(CurrentBar));
-
-						// 			}
-						// 			else
-						// 			{
-						// 				// Artificial way of adding "decay" to zones where price keeps on consolidating
-						// 				zones[i].SetStrength(-1);
-						// 				Print("Strikeout! Overlap res");
-						// 				Draw.Text(this, zones[i].ID + " Strikeout overlap res Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, Bars.GetClose(CurrentBar));
-						// 			}
-						// 			zones[i].Tracked = false;
-						// 			zones[i].OverlapCheck = false;
-						// 			zones[i].BarTracker = 0;
-						// 			zones[i].TestType = "";
-						// 			zones[i].StrengthProxy = 0;
-
-						// 		}
-						// 	}
-						// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-						// Debug
-						//Draw.Text(this, zones[i].ID + " : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
-						// (Bars.GetOpen(CurrentBar) + Bars.GetClose(CurrentBar))/2
 						if (Bars.GetClose(CurrentBar) >= zones[i].ZoneBottomY && Bars.GetClose(CurrentBar) <= zones[i].ZoneTopY)
 						{
 							totalStrength += zones[i].GetStrength();
@@ -594,29 +528,15 @@ namespace NinjaTrader.NinjaScript.Indicators
 						else if (Bars.GetClose(CurrentBar) <= zones[i].ZoneTopY && Bars.GetClose(CurrentBar) >= zones[i].ZoneBottomY)
 						{
 							zones[i].TotalAbsoluteVolume += VOL()[0];
-							//Print(VOL()[0]);
 						}
 
 
 
 
-
-						//Print(((decimal)(100 * Math.Pow((double)(1 / 2), (double)(5 / 5750)))).ToString());
-						//Print(   Math.Pow(1 / 2, 2));
-						//Print(zones[i].Decay);
 						// Update currently tracked zones strengths
 						if (zones[i].Tracked && zones[i].Expired == false)
 						{
 
-							// if (((Bars.GetTime(CurrentBar) - Bars.GetTime(zones[i].BarTracker)).Minutes < TimeThreshold) && Bars.IsLastBarOfSession)
-							// {
-
-							// 	zones[i].Tracked = false;
-							// 	zones[i].OverlapCheck = true;
-							// 	zones[i].CloseOverlap = (Bars.GetTime(CurrentBar) - Bars.GetTime(zones[i].BarTracker)).Minutes - TimeThreshold;
-
-
-							// }
 							// Update total absolute volume for zone
 							double VolAccumulation = 0;
 							if (UseVolAccumulation)
@@ -636,19 +556,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 							//Print(zones[i].StrengthProxy);
 							if ((Bars.GetTime(CurrentBar) - Bars.GetTime(zones[i].BarTracker)).Minutes >= TimeThreshold)
 							{
-								//Print(SupportAreaStrengthThreshold + " | " + BreakAreaStrengthThreshold + " | " +  zones[i].StrengthProxy);
-								//Print(zones[i].ID.ToString() + " Sup timed out, strength: " + zones[i].GetStrength() + ", proxy strength: " + zones[i].StrengthProxy + ", Threshold: " + SupportAreaStrengthThreshold.ToString());
-								// The zone failed to maintain the threshold to be considered a "good support" during this time period
-								// Zone adds whatever strength occurred during this time, be it positive or negative as long as it was under the thresholds
-								////*
 								// if the price bounces/reverses off the zone
 								if (zones[i].TrackedAreaBetweenMAAndZeroLine >= SupportAreaStrengthThreshold)
 								{
 
 									zones[i].SetStrength(zones[i].TrackedAreaBetweenMAAndZeroLine + VolAccumulation);
 									zones[i].ConsecutiveBounces++;
+									/*
 									if (zones[i].TestType == "sup") Draw.Text(this, zones[i].ID + " Sup Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
 									else Draw.Text(this, zones[i].ID + " Res Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
+									*/
 								}
 								// zones that are broken through should weaken
 								else if (zones[i].TrackedAreaBetweenMAAndZeroLine <= BreakAreaStrengthThreshold)
@@ -658,25 +575,24 @@ namespace NinjaTrader.NinjaScript.Indicators
 									// supports that are broken will see the price further break down
 									// resistance that is broken will see the price further rally
 									// Relate the break of a zone with relative VOLUME!!! THe more volume needed to break, the STRONGER THE ZONE IS!!! If low volume was needed to break, THE ZONE IS AND WILL BE WEAK!
-									//Print(zones[i].StrengthProxy + " | " + VolAccumulation);
-									//Print( zones[i].GetStrength() + " | " + zones[i].StrengthProxy + VolAccumulation / 2);
 									zones[i].SetStrength(zones[i].TrackedAreaBetweenMAAndZeroLine + VolAccumulation);
 									//Print(zones[i].GetStrength());
 									zones[i].TotalTimesBroken++;
 									zones[i].ConsecutiveBounces = 0;
+									/*
 									if (zones[i].TestType == "sup") Draw.Text(this, zones[i].ID + " Sup broken : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
 									else Draw.Text(this, zones[i].ID + " Res broken : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
+									*/
 								}
 								else
 								{
 									// Artificial way of adding "decay" to zones where price keeps on consolidating
 									zones[i].SetStrength(VolAccumulation);
-									//Print("Strikeout!");
+									/*
 									if (zones[i].TestType == "sup") Draw.Text(this, zones[i].ID + " Strikeout Sup Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
 									else Draw.Text(this, zones[i].ID + " Strikeout Res Tested : " + zones[i].GetStrength().ToString(), zones[i].GetStrength().ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
+									*/
 								}
-								//Print(zones[i].GetStrength() + " " + zones[i].VolAccumulation);
-								//Print(zones[i].GetStrength());
 								zones[i].Tracked = false;
 								zones[i].BarTracker = 0;
 								zones[i].TestType = "";
@@ -686,48 +602,24 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 							}
 						}
-						// If previous bar LOW OR CLOSE is inside a zone and this zone is not currently being tracked (prevent duplicate adjustment)
-						// || (Bars.GetLow(CurrentBar - 1) <= zones[i].ZoneTopY && Bars.GetLow(CurrentBar - 1) >= zones[i].ZoneBottomY)
 						if (zones[i].Direction == -1 && ((Bars.GetClose(CurrentBar) <= zones[i].ZoneTopY && Bars.GetClose(CurrentBar) >= zones[i].ZoneBottomY)))
 						{
 							if (zones[i].Tracked == false)
 							{
 
-								// if (Bars.GetClose(CurrentBar) > Bars.GetOpen(CurrentBar))
-								// {
-								// 	zones[i].Tracked = true;
-								// 	zones[i].BarTracker = CurrentBar;
-								// 	//Draw.Line(NinjaScriptBase owner, string tag, int startBarsAgo, double startY, int endBarsAgo, double endY, Brush brush)
-								// 	Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.White);
-								// 	zones[i].TestType = "sup";
-
-								// }
-
 								zones[i].Tracked = true;
 								zones[i].BarTracker = CurrentBar;
-								//Draw.Line(NinjaScriptBase owner, string tag, int startBarsAgo, double startY, int endBarsAgo, double endY, Brush brush)
 								Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.Green);
 								zones[i].TestType = "sup";
 
 							}
 						}
 
-
-						// Res
-						// || (Bars.GetHigh(CurrentBar - 1) <= zones[i].ZoneTopY && Bars.GetHigh(CurrentBar - 1) >= zones[i].ZoneBottomY)
 						else if (zones[i].Direction == 1 && ((Bars.GetClose(CurrentBar) <= zones[i].ZoneTopY && Bars.GetClose(CurrentBar) >= zones[i].ZoneBottomY)))
 						{
 							if (zones[i].Tracked == false)
 							{
 
-								// if (Bars.GetClose(CurrentBar) < Bars.GetOpen(CurrentBar))
-								// {
-								// 	zones[i].Tracked = true;
-								// 	zones[i].BarTracker = CurrentBar;
-								// 	Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.White);
-								// 	zones[i].TestType = "res";
-
-								// }
 
 								zones[i].Tracked = true;
 								zones[i].BarTracker = CurrentBar;
@@ -736,16 +628,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 							}
 						}
-						//	Record zone(s) id
-						//	If THIS BAR closes green
-						//		Draw zeroline from THIS BAR open
-						//		During time threshold limit (30 minutes?), if SMA area between zero line INCREASES:
-						//			Zone strength increases by a factor determined by increased area
-						//			Stop tracking zone
-						//		Else
-						//			Zone strength decreases by a factor determiend by decreased area
 					}
-					//Print(totalStrength);
 				}
 
 
@@ -766,33 +649,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 				//	IF 'AREA' STAYS UNDER 'THRESHOLD' FOR x TIME, A ZONE IS CREATED
 				//	
 				//	ONCE 'LOW THRESHOLD IS PASSED, STRENGTH OF ZONE INCREASES IF PRICE CONTINUES TO STAY INSIDE ZONE FOR THE DAY
-
-
-
-				// Update direction (up or down) for zones
-
-				// START COMPUTING PREVIOUS DAYS' ZONES
-				// IF Zones[] IS NOT EMPTY (checks to make sure a day already passed)
-				//		Adjust shape, strength, size of High/Low zones
-
-				if (Bars.GetLow(CurrentBar) <= dayLow)
-				{
-					// Update low of day
-					dayLow = Bars.GetLow(CurrentBar);
-					dayLowTime = Bars.GetTime(CurrentBar);
-					//Draw.Diamond(this, "Day Low: " + dayLow.ToString() + " at " + dayLowTime, true, dayLowTime, dayLow, Brushes.Green);
-				}
-				if (Bars.GetHigh(CurrentBar) >= dayHigh)
-				{
-					// Update high of day
-					dayHigh = Bars.GetHigh(CurrentBar);
-					dayHighTime = Bars.GetTime(CurrentBar);
-					//Draw.Diamond(this, "Day High: " + dayHigh.ToString() + " at " + dayHighTime, true, dayHighTime, dayHigh, Brushes.Red);
-				}
-
+				ComputeHL();
 				// update zone database for lows and highs for this day
 				if (Bars.IsLastBarOfSession)
 				{
+					/*
+					for (int i=0; i<priceHitsArray.Length/2;i++)
+					{
+						Print(priceHitsArray[0, i] + " | " + priceHitsArray[1, i]);
+					}
+					*/
 					numFullTradingDays++;
 					if (zones.Count > 0 && Expiration != -1)
 					{
@@ -800,11 +666,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 						{
 							if ((Bars.GetTime(CurrentBar) - zones[i].ZoneLeftX).Days >= Expiration)
 							{
-								//Print("bar expired");
 								zones[i].Expired = true;
 							}
-							//Print("Zone " + zones[i].ID + ": " + zones[i].TotalRelativeVolume + " / " + zones[i].NumTimeBroken + " * " + zones[i].GetStrength() +  " = " + zones[i].TotalRelativeVolume / zones[i].NumTimeBroken * zones[i].GetStrength());
-							//Print(zones[i].TotalAbsoluteVolume);
 						}
 					}
 					// default values
@@ -901,9 +764,38 @@ namespace NinjaTrader.NinjaScript.Indicators
 					z.UpdateEnd(this);
 				});
 				ComputeZones(zones);
-
+				ScuffedVolumeProfile();
 			}
 
+		}
+
+		private void ComputeHL()
+		{
+			if (Bars.GetLow(CurrentBar) <= dayLow)
+			{
+				// Update low of day
+				dayLow = Bars.GetLow(CurrentBar);
+				dayLowTime = Bars.GetTime(CurrentBar);
+				//Draw.Diamond(this, "Day Low: " + dayLow.ToString() + " at " + dayLowTime, true, dayLowTime, dayLow, Brushes.Green);
+			}
+			if (Bars.GetHigh(CurrentBar) >= dayHigh)
+			{
+				// Update high of day
+				dayHigh = Bars.GetHigh(CurrentBar);
+				dayHighTime = Bars.GetTime(CurrentBar);
+				//Draw.Diamond(this, "Day High: " + dayHigh.ToString() + " at " + dayHighTime, true, dayHighTime, dayHigh, Brushes.Red);
+			}
+		}
+
+		private void ResetSessionVars()
+		{
+			dayStartBar = CurrentBar;
+			dayTOP = Bars.GetHigh(CurrentBar);
+			dayBOTTOM = Bars.GetLow(CurrentBar);
+			dayHigh = Bars.GetHigh(CurrentBar);
+			dayLow = Bars.GetLow(CurrentBar);
+			dayHighTime = Bars.GetTime(CurrentBar);
+			dayLowTime = Bars.GetTime(CurrentBar);
 		}
 
 		public void ComputeZones(List<ZONE> z)
@@ -969,15 +861,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 						}
 
 					}
-					//Print(zonesAboveTemp + " " + zonesBelowTemp);
 
 
 					if (z[i].Direction == 1) area = ResZoneColor;
 					else if (z[i].Direction == -1) area = SupZoneColor;
 					else area = Brushes.Yellow;
-					Draw.Rectangle(this, "Zone ID: " + z[i].ID.ToString(), true, z[i].ZoneLeftX, z[i].ZoneBottomY, z[i].ZoneRightX, z[i].ZoneTopY, outline, area, Convert.ToInt32(z[i].GetRelativeStrength(this)/10), true);
+					//Draw.Rectangle(this, "Zone ID: " + z[i].ID.ToString(), true, z[i].ZoneLeftX, z[i].ZoneBottomY, z[i].ZoneRightX, z[i].ZoneTopY, outline, area, Convert.ToInt32(z[i].GetRelativeStrength(this)/10), true);
 					// Draw text for absolute volume inside zone, basically a scuffed volume profile indicator
-					Draw.Text(this, zones[i].ID.ToString(), zones[i].GetRelativeStrength(this).ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
+					//Draw.Text(this, zones[i].ID.ToString(), zones[i].GetRelativeStrength(this).ToString(), 0, (zones[i].ZoneBottomY + zones[i].ZoneTopY) / 2);
 				}
 				double mul = 0;
 				if (zonesAboveTemp > 0.5)
@@ -1116,12 +1007,31 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		}
 
+
+		public void DrawVolumeProfileAccessories()
+		{
+			if (priceHitsArray.Length / 2 > 0)
+			{
+				double max = 0;
+				double maxP = 0;
+				for (int i = 0; i < priceHitsArray.Length / 2; i++)
+				{
+					if (priceHitsArray[1, i] > max)
+					{
+						max = priceHitsArray[1, i];
+						maxP = priceHitsArray[0, i];
+					}
+				}
+				Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxP, Bars.GetTime(CurrentBar), maxP, "");
+			}
+		}
+
 		public bool WasZeroResX(int days)
 		{
 			if (ZonesAboveExtrema.Count > 0)
 			{
 				int index = ZonesAboveExtrema.Count - days;
-				if (index < 0) return false;
+				if (index < 0 && index >= ZonesAboveExtrema.Count) return false;
 				if (ZonesAboveExtrema[index]) return true;
 			}
 			return false;
@@ -1144,7 +1054,185 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 
 
+
+
+
+
+		/*
+		 * VOLUME PROFILE
+		 */
+		
+
+	   public void ScuffedVolumeProfile()
+	   {
+
+		   int x;
+
+		   int ticksInRange = (int)Math.Round((dayHigh - dayLow) / TickSize, 0);
+
+		   //fit ticks into array by so many TicksPerSlot
+		   int ticksPerSlot = (ticksInRange / TotalSlots) + 1; //should just drop the fract part.
+		   int lastSlotUsed = ticksInRange / ticksPerSlot; //Zero based, drop fract part.
+
+
+		   slotHalfRange = ((TickSize * ticksPerSlot)) / 2;
+		   double comboSlotOffset = (ticksPerSlot > 1 ? slotHalfRange - (((dayLow + ((lastSlotUsed + 1) * TickSize * ticksPerSlot)) - dayHigh) / 2) : 0);   //move down to center it.
+		   //clear counts in any case.
+		   for (x = 0; x <= lastSlotUsed; x++)
+		   {
+			   // 0 -> 999, reset from bottom up.
+			   priceHitsArray[0, x] = (x * TickSize * ticksPerSlot) + comboSlotOffset; //Lowest Tick Value/Slot upped to mid value point
+			   priceHitsArray[0, x] += dayLow; //add it to the bottom
+			   priceHitsArray[1, x] = 0.0; //clear counts per value.
+		   }
+		   if (ticksInRange > 0)
+		   {
+			   double BarH;
+			   double BarL;
+			   int index=0;
+
+			   int i = dayStartBar;
+			   while (i <= CurrentBar)
+			   {
+				   BarH = Bars.GetHigh(i);
+				   BarL = Bars.GetLow(i);
+
+				   //Volume Weighted Time Price Opportunity - Disperses the Volume of the bar over the range of the bar so each price touched is weighted with volume
+				   //BarH=High[i]; BarL=Low[i];
+				   int TicksInBar = (int)Math.Round((BarH - Bars.GetLow(i)) / TickSize + 1, 0);
+				   while (BarL <= BarH)
+				   {
+					   index = (int)Math.Round((BarL - dayLow) / TickSize, 0);
+					   index /= ticksPerSlot;  //drop fract part.
+					   priceHitsArray[1, index] += Bars.GetVolume(i) / TicksInBar;
+					   BarL = BarL + TickSize;
+				   }
+				   i++;
+			   }
+		   }
+		}
+
+		/*
+	   private void DrawSlotsUV(ChartScale chartScale, int slotHeight, SharpDX.Direct2D1.Brush eBrush)
+	   {
+		   // draw slots universal
+		   // left or right based, and percentage of area
+
+		   int hWidth, yPos, vPos, vHeight, prevYpos = 0, barsInRange = 0;
+		   double sessMaxHits = 0.0;
+		   int ScreenPercent = 100;
+
+		   int sbarNum = leftScrnBnum; //default is left most screen bar.
+		   int ebarNum = sbarNum + barsInRange;
+		   int barPaintWidth = ChartControl.GetBarPaintWidth(ChartBars);
+		   int halfBarWidth = (int)(barPaintWidth * 0.5);
+		   int totalHeight = Convert.ToInt32(ChartPanel.Y + ChartPanel.H);
+
+
+		   if (--barsInRange < 1)
+			   return; //have at least 1 bar to paint. Don't paint last bar.
+
+		   int leftMostPos = ChartControl.GetXByBarIndex(ChartBars, sbarNum) - halfBarWidth;
+		   int rightMostPos = ChartControl.GetXByBarIndex(ChartBars, ebarNum);
+
+		   double price = ((rightMostPos - leftMostPos) * ((100 - ScreenPercent) * 0.01));    //temp usage of price
+		   rightMostPos -= (int)price;
+
+		   int totalWidth = rightMostPos - leftMostPos;
+
+
+		   int ticksInRange = (int)Math.Round((dayHigh - dayLow) / TickSize, 0);
+
+		   //fit ticks into array by so many TicksPerSlot
+		   int ticksPerSlot = (ticksInRange / TotalSlots) + 1; //should just drop the fract part.
+		   int le = ticksInRange / ticksPerSlot;
+
+
+		   for (int i=0;i< le; i++)
+		   {
+
+			   yPos = chartScale.GetYByValue(price);
+
+			   vPos = yPos + slotHeight;
+			   if (i != 0)
+				   vPos = prevYpos;
+
+			   prevYpos = yPos;    //incase we continue here.
+			   if (yPos >= totalHeight || vPos <= 1)
+				   continue;   //too low or high to display
+
+			   //take out any negitive portion
+			   yPos += (yPos < 0 ? yPos * -1 : 0);
+
+			   if (vPos > totalHeight)
+				   vPos = totalHeight;
+			   vHeight = vPos - yPos;
+			   prevYpos = yPos;
+
+			   price = priceHitsArray[0, i] + slotHalfRange;   //take it from mid to top.
+			   hWidth = (int)((totalWidth) * (priceHitsArray[1, i] / (sessMaxHits)));
+
+			   SharpDX.RectangleF rect = new SharpDX.RectangleF(leftMostPos + (totalWidth - hWidth), yPos, hWidth, vHeight);
+
+
+			   RenderTarget.FillRectangle(rect, eBrush);
+		   }
+
+
+	   }
+
+	   protected override void OnRender(ChartControl chartControl, ChartScale chartScale)
+	   {
+		   base.OnRender(chartControl, chartScale);
+
+		   if (BarsArray[0].Count < 2 || chartControl.SlotsPainted < 2)
+			   return;
+
+		   int rightScrnBnum = Math.Min(ChartBars.ToIndex, CurrentBar); //limit to actual bars vs. white space on right.
+		   int leftScrnBnum = Math.Min(ChartBars.FromIndex, CurrentBar); //not bigger than CurrentBar (ie. only 1 bar on screen).
+
+		   int rightMostSessNum = CurrentBar;
+
+		   double chartLowPrice = double.MaxValue;
+		   for (int i = leftScrnBnum; i <= rightScrnBnum; i++)
+			   chartLowPrice = Math.Min(chartLowPrice, Bars.GetLow(i));
+
+		   int screenVLowPos = chartScale.GetYByValue(chartLowPrice);
+
+
+
+		   int SlotVHeight = screenVLowPos - chartScale.GetYByValue(chartLowPrice + (slotHalfRange * 2.0));
+		   if (SlotVHeight < 1)
+			   SlotVHeight = 1;    //at least 1
+		   ScuffedVolumeProfile();
+		   DrawSlotsUV(chartScale, SlotVHeight, sessBrush);
+
+	   }
+
+	   public override void OnRenderTargetChanged()
+	   {
+		   if (sessBrush != null)
+			   sessBrush.Dispose();
+
+		   if (RenderTarget != null)
+		   {
+			   try
+			   {
+				   sessBrush = slotSessionColor.ToDxBrush(RenderTarget);
+			   }
+			   catch (Exception e) { }
+		   }
+	   }
+	   */
+
+
+
+
+
+
 		#region Properties
+
+
 		[NinjaScriptProperty]
 		[Range(int.MinValue, int.MaxValue)]
 		[Display(Name = "Area strength threshold multiplier", Description = "Multiplies the minimum threshold required for zones to gain strength", Order = 1, GroupName = "Parameters")]
