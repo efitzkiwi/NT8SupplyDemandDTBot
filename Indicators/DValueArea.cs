@@ -678,7 +678,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		
 		public override void OnRenderTargetChanged()
 		{
-			Print(State);
+			//Print(State);
 			if (sessBrush != null)
 				sessBrush.Dispose();
 

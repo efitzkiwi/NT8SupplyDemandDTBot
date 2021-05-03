@@ -29,6 +29,7 @@ using NinjaTrader.NinjaScript.DrawingTools;
 using NinjaTrader.Gui.DrawingTools;
 using NinjaTrader.Gui.NinjaScript;
 using System.Threading;
+using System.Security.Cryptography;
 #endregion
 
 
@@ -309,6 +310,63 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public double TimeAlive { get; set; }
 
 	}
+
+
+
+
+	public class ZoneBox
+	{
+		private readonly AdvancedSRZones indicatorObjectRef;
+		private Brush outlineColor = Brushes.SlateGray;
+		private Brush areaColor = Brushes.Green;
+		private double opacity = 50;
+		public int activeLeftSideAbsBar { get; set; }
+		public int activeRightSideAbsBar { get; set; }
+		public int originalLeftSideAbsBar { get; set; }
+		public int originalRightSideAbsBar { get; set; }
+		public double topPrice { get; set; }
+		public double bottomPrice { get; set; }
+		public bool isActive { get; set; }
+		public double totalVolume { get; set; }
+		public string ID { get; set; }
+		public int type { get; set; } // 0 = supp 1 = res
+		public ZoneBox(AdvancedSRZones obj, int LSAB, int RSAB, double TP, double BP)
+		{
+			indicatorObjectRef = obj;
+			originalLeftSideAbsBar = activeLeftSideAbsBar = LSAB;
+			originalRightSideAbsBar = activeRightSideAbsBar = RSAB;
+			topPrice = TP;
+			bottomPrice = BP;
+			ID = "Box " + originalLeftSideAbsBar.ToString();
+			UpdateBox();
+		}
+		public void DisplayBox()
+		{
+			activeRightSideAbsBar = indicatorObjectRef.CurrentBar;
+			if (type == 0) areaColor = Brushes.Green;
+			else if (type == 1) areaColor = Brushes.Red;
+			Draw.Rectangle(indicatorObjectRef, ID, true, indicatorObjectRef.CurrentBar - activeLeftSideAbsBar, bottomPrice, indicatorObjectRef.CurrentBar - activeRightSideAbsBar, topPrice, outlineColor, areaColor, (int)opacity, true);
+
+		}
+
+		public void UpdateBox()
+		{
+			activeRightSideAbsBar = indicatorObjectRef.CurrentBar;
+			if (indicatorObjectRef.GetCurrentAsk() >= bottomPrice)
+			{
+				type = 0;
+			}
+			else if (indicatorObjectRef.GetCurrentAsk() <= topPrice)
+			{
+				type = 1;
+			}
+		}
+	}
+
+
+
+
+
 	public class AdvancedSRZones : Indicator
 	{
 		bool debugPrint = false;
@@ -357,6 +415,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 		SharpDX.Direct2D1.Brush sessBrush;
 		private Brush slotSessionColor = Brushes.Lime;
 		int TotalSlots = 500;
+		double maxBar = 0;
+		double maxPrice = 0;
 
 
 		readonly List<ZONE> zones = new List<ZONE>();
@@ -365,6 +425,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		double SupportAreaStrengthThreshold;
 		double BreakAreaStrengthThreshold;
+
+
+		List<List<double>> InflectionPoints = new List<List<double>>();
+		double AvgArea = 40;
+		List<ZoneBox> ZoneBoxList = new List<ZoneBox>();
 
 
 		protected override void OnStateChange()
@@ -424,7 +489,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 			{
 
 				// Do volume profile stuff
-				DrawVolumeProfileAccessories();
+				//DrawVolumeProfileAccessories();
+
+				for (int i=0;i<ZoneBoxList.Count;i++)
+				{
+					ZoneBoxList[i].UpdateBox();
+					ZoneBoxList[i].DisplayBox();
+				}
 
 				if (CurrentBar >= 1)
 				{
@@ -609,7 +680,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 								zones[i].Tracked = true;
 								zones[i].BarTracker = CurrentBar;
-								Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.Green);
+								//Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.Green);
 								zones[i].TestType = "sup";
 
 							}
@@ -623,7 +694,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 								zones[i].Tracked = true;
 								zones[i].BarTracker = CurrentBar;
-								Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.Red);
+								//Draw.Diamond(this, "Zero line #" + CurrentBar, true, Bars.GetTime(CurrentBar), Bars.GetClose(CurrentBar), Brushes.Red);
 								zones[i].TestType = "res";
 
 							}
@@ -633,7 +704,121 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 
 
+				// inflection points stuff
+				int periodI = 10;
+				if (CurrentBar > periodI+1)
+				{
+					int totalTimeToCompare = 68;
+					for (int i = 0; i < InflectionPoints.Count; i++)
+					{
+						double bar = InflectionPoints[i][0];
+						double type = InflectionPoints[i][3];
+						if (InflectionPoints[i][1] == 0 && InflectionPoints[i][2] < AvgArea)
+						{
+							if ((Bars.GetTime(CurrentBar) - Bars.GetTime((int)bar)).TotalMinutes > totalTimeToCompare/2)
+							{
+								// Invalid inflection point, never use it
+								InflectionPoints[i][1] = -1;
+							}
+							// add more area to this inflection point
+							if (type == 1) InflectionPoints[i][2] += Bars.GetHigh((int)bar) - SMA(periodI)[0];
+							else if (type == 2) InflectionPoints[i][2] += SMA(periodI)[0] - Bars.GetLow((int)bar);
+						}
+						else if (InflectionPoints[i][2] >= AvgArea && InflectionPoints[i][1] != -1 && InflectionPoints[i][1] != 1)
+						{
+							// this point is a solid resistance point
+							InflectionPoints[i][1] = 1;
+							if (type == 1) Draw.Diamond(this, "Inflection pt dn " + (int)bar, true, Bars.GetTime((int)bar), Bars.GetHigh((int)bar), Brushes.Red);
+							else if (type == 2) Draw.Diamond(this, "Inflection pt up " + (int)bar, true, Bars.GetTime((int)bar), Bars.GetLow((int)bar), Brushes.Green);
 
+							int validPointExtrema = 0;
+							int fastPeriod = 3;
+							Brush outlineColor = Brushes.DarkSlateGray;
+							Brush areaColor = Brushes.Khaki;
+							if (type == 1)
+							{
+								for (int f = CurrentBar-(int)bar; f < CurrentBar-dayStartBar;f++)
+								{
+									//if ((Bars.GetTime(CurrentBar) - Bars.GetTime(f)).TotalMinutes > 30) break;
+									if (IsInflection("Down", fastPeriod, 1, f))
+									{
+										validPointExtrema = CurrentBar - f;
+										break;
+									}
+								}
+								if (validPointExtrema != 0)
+								{
+									Draw.Diamond(this, "Inflection pt dn extrema " + validPointExtrema, true, Bars.GetTime(validPointExtrema), Bars.GetHigh(validPointExtrema), Brushes.DarkRed);
+									//Draw.Rectangle(this, "Inflection pt box " + validPointExtrema, true, CurrentBar-validPointExtrema, Bars.GetHigh(validPointExtrema), CurrentBar - (int)InflectionPoints[i][0], Bars.GetHigh((int)InflectionPoints[i][0]), outlineColor, areaColor, 80);
+									ZoneBoxList.Add(new ZoneBox(this, validPointExtrema, (int)bar, Math.Max(Bars.GetHigh((int)bar), Bars.GetHigh(validPointExtrema)), Math.Min(Bars.GetHigh((int)bar), Bars.GetHigh(validPointExtrema))));
+								}
+							}
+							else if (type == 2)
+							{
+								for (int f = CurrentBar-(int)bar; f < CurrentBar - dayStartBar; f++)
+								{
+									//if ((Bars.GetTime(CurrentBar) - Bars.GetTime(f)).TotalMinutes > 30) break;
+									if (IsInflection("Up", fastPeriod, 1, f))
+									{
+										validPointExtrema = CurrentBar - f;
+										break;
+									}
+								}
+								if (validPointExtrema != 0)
+								{
+									Draw.Diamond(this, "Inflection pt up extrema " + validPointExtrema, true, Bars.GetTime(validPointExtrema), Bars.GetLow(validPointExtrema), Brushes.LightGreen);
+									//Draw.Rectangle(this, "Inflection pt box " + validPointExtrema, true, CurrentBar - validPointExtrema, Bars.GetLow(validPointExtrema), CurrentBar - (int)InflectionPoints[i][0], Bars.GetLow((int)InflectionPoints[i][0]), outlineColor, areaColor, 80);
+									ZoneBoxList.Add(new ZoneBox(this, validPointExtrema, (int)bar, Math.Min(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema)), Math.Max(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema))));
+
+								}
+							}
+
+
+
+							var validPoints = 0;
+							for (int j = 0; j < InflectionPoints.Count; j++)
+							{
+								if (InflectionPoints[j][1] == 1)
+								{
+									validPoints++;
+									AvgArea += InflectionPoints[j][2];
+								}
+							}
+							AvgArea = AvgArea / validPoints;
+						}
+					}
+					totalTimeToCompare = 30;
+					if (IsInflection("Down", periodI, 6))
+					{
+						// getting area from earlier time
+						double initialAvg = 0;
+						TimeSpan subt = new TimeSpan(0, totalTimeToCompare / 2, 0);
+						int prevBar = Bars.GetBar(Bars.GetTime(CurrentBar).Subtract(subt));
+						if (prevBar < dayStartBar) prevBar = dayStartBar;
+						double zero = Bars.GetHigh(CurrentBar);
+						for (int i = prevBar; i <= CurrentBar; i++)
+						{
+							initialAvg += zero - SMA(periodI)[CurrentBar-i];
+						}
+						List<double> tempL = new List<double>() { CurrentBar-2, 0, initialAvg, 1 };
+						InflectionPoints.Add(tempL);
+					}
+
+					else if (IsInflection("Up", periodI, 6))
+					{
+						double initialAvg = 0;
+						TimeSpan subt = new TimeSpan(0, totalTimeToCompare/2, 0);
+						int prevBar = Bars.GetBar(Bars.GetTime(CurrentBar).Subtract(subt));
+						if (prevBar < dayStartBar) prevBar = dayStartBar;
+						double zero = Bars.GetLow(CurrentBar);
+						for (int i = prevBar; i <= CurrentBar; i++)
+						{
+							initialAvg += SMA(periodI)[CurrentBar - i] - zero;
+						}
+						List<double> tempL = new List<double>() { CurrentBar-2, 0, initialAvg, 2 };
+						InflectionPoints.Add(tempL);
+					}
+				}
 
 
 				// NEURAL NETWORK
@@ -757,6 +942,36 @@ namespace NinjaTrader.NinjaScript.Indicators
 					ZonesBelowExtrema.Add(true ? ZonesBelowToday == 0 : false);
 					ZonesAboveToday = -1;
 					ZonesBelowToday = -1;
+
+
+
+					/*
+					// FIRST DO BOXES CREATED TODAY
+					// Merge boxes if they fit
+					for (int i = 0; i < ZoneBoxList.Count; i++)
+					{
+						ZoneBox thisBox = ZoneBoxList[i];
+						if (thisBox.originalLeftSideAbsBar >= dayStartBar)
+						{
+							for (int j = 1; j < ZoneBoxList.Count; j++)
+							{
+								ZoneBox thisSecondBox = ZoneBoxList[j];
+								if (thisBox.originalLeftSideAbsBar >= dayStartBar)
+								{
+									// we're now comparing (each box against each box) created during the day
+
+								}
+							}
+						}
+						// find the closest box
+						ZoneBox zbMin;
+						for (int j = 1; j < ZoneBoxList.Count; j++)
+						{
+							if (ZoneBoxList[i].bottomPrice)
+						}
+					}
+					*/
+
 				}
 				MergeZones();
 				zones.ForEach(delegate (ZONE z)
@@ -1012,17 +1227,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		{
 			if (priceHitsArray.Length / 2 > 0)
 			{
-				double max = 0;
-				double maxP = 0;
-				for (int i = 0; i < priceHitsArray.Length / 2; i++)
-				{
-					if (priceHitsArray[1, i] > max)
-					{
-						max = priceHitsArray[1, i];
-						maxP = priceHitsArray[0, i];
-					}
-				}
-				Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxP, Bars.GetTime(CurrentBar), maxP, "");
+				Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxPrice, Bars.GetTime(CurrentBar), maxPrice, "");
 			}
 		}
 
@@ -1052,6 +1257,22 @@ namespace NinjaTrader.NinjaScript.Indicators
 			return null;
 		}
 
+		public bool IsInflection(string direction, int period, int smooth = 1, int barsAgo = 0, bool detrend = false, InputSeriesType ist = InputSeriesType.LinRegSlope, NormType nt = NormType.None) // "Up" or "Down"
+		{
+			SlopeEnhancedOp refLRS = SlopeEnhancedOp(period, 56, smooth, detrend, ist, nt, Brushes.Green, Brushes.Red);
+
+			if (CurrentBar < period + 1 + barsAgo) return false;
+			if (direction == "Up" && refLRS[1+barsAgo] < 0 && refLRS[0+barsAgo] > 0)
+			{
+				return true;
+			}
+			else if (direction == "Down" && refLRS[1+barsAgo] > 0 && refLRS[0+barsAgo] < 0)
+			{
+				return true;
+			}
+			return false;
+		}
+
 
 
 
@@ -1061,9 +1282,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 		/*
 		 * VOLUME PROFILE
 		 */
-		
 
-	   public void ScuffedVolumeProfile()
+
+		public void ScuffedVolumeProfile()
 	   {
 
 		   int x;
@@ -1087,11 +1308,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 		   }
 		   if (ticksInRange > 0)
 		   {
-			   double BarH;
-			   double BarL;
-			   int index=0;
+				double BarH;
+				double BarL;
+				int index=0;
+				maxBar = 0;
+				maxPrice = 0;
+				double tHxP = 0.0; 
+				double hitsTotal = 0.0;
+				double sessVAtop = 0.0;
+				double sessVAbot = 0.0;
+				double PctOfVolumeInVA = 0.7;
 
-			   int i = dayStartBar;
+				int i = dayStartBar;
 			   while (i <= CurrentBar)
 			   {
 				   BarH = Bars.GetHigh(i);
@@ -1107,9 +1335,56 @@ namespace NinjaTrader.NinjaScript.Indicators
 					   priceHitsArray[1, index] += Bars.GetVolume(i) / TicksInBar;
 					   BarL = BarL + TickSize;
 				   }
-				   i++;
+					tHxP += (priceHitsArray[1, index] * priceHitsArray[0, index]);
+					hitsTotal += priceHitsArray[1, index];
+					if (priceHitsArray[1, index] > maxBar)
+					{
+						maxBar = priceHitsArray[1, index];
+						maxPrice = priceHitsArray[0, index];
+					}
+					i++;
 			   }
-		   }
+
+			   
+				sessVAtop = tHxP / hitsTotal;
+				sessVAbot = sessVAtop;
+
+				//This loop calculates the percentage of hits contained within the Value Area
+				double viA = 0.0;
+				double tV = 0.00001;
+				double adj = 0.0;
+				i = 0;
+				if (priceHitsArray.Length / 2 == 0) return;
+				while (viA / tV < PctOfVolumeInVA)
+				{
+					sessVAbot = sessVAbot - adj;
+					sessVAtop = sessVAtop + adj;
+					viA = 0.0;
+					tV = 0.00001;
+					for (i = 0; i < priceHitsArray.Length/2; i++)
+					{
+						if (priceHitsArray[0, i] > sessVAbot - adj && priceHitsArray[0, i] < sessVAtop + adj)
+							viA += priceHitsArray[1, i];
+						tV += priceHitsArray[1, i];
+					}
+					adj = TickSize;
+				}
+
+
+				// draw
+				if (Bars.IsLastBarOfSession)
+				{
+					Draw.Line(this, "vabot" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAbot, Bars.GetTime(CurrentBar), sessVAbot, "");
+					Draw.Line(this, "vatop" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAtop, Bars.GetTime(CurrentBar), sessVAtop, "");
+					Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxPrice, Bars.GetTime(CurrentBar), maxPrice, "");
+				}
+				
+
+			}
+
+		   
+			
+
 		}
 
 		/*
