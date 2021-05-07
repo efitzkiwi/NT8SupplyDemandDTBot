@@ -70,7 +70,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 
         double orderMultiplier = 1;
-        bool debugPrint = true;
+        bool debugPrint = false;
         bool debugDraw = false;
 
         // Unmanaged orders
@@ -116,7 +116,6 @@ namespace NinjaTrader.NinjaScript.Strategies
         bool CancelOCOAndExitLongOrder = false;
         bool CancelOCOAndExitShortOrder = false;
         bool ProtectOverlapFromCancelDelayToEnter = false;
-        ZONE orderZone;
         bool NewOCO = false;
         int count = 0;
         private SessionIterator sessIter;
@@ -922,14 +921,14 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
         public void TryZoneOrders()
-        {
+        { 
             double LST = LongStrengthThreshold + (LongStrengthThreshold * (-PriceAdjustedDailySMASlope));
             double STT = ShortStrengthThreshold + (ShortStrengthThreshold * (-PriceAdjustedDailySMASlope));
-
-            double strength = ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Strength;
-            int direction = ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Direction;
-
-            if (strength > LST && direction < 0) // if we're in a long zone
+            LST = 0;
+            STT = 0;
+            //double strength = ASRZ.GetZoneStrength(ASRZ.GetCurrentZone());
+            int direction = ASRZ.GetZoneType(ASRZ.GetCurrentZone());
+            if (ASRZ.DoesZoneStrengthComply(ASRZ.GetCurrentZone(), ">", LST) && direction == 0) // if we're in a long zone
             {
                 if (Position.MarketPosition == MarketPosition.Flat) // if we have no open positions
                 {
@@ -954,7 +953,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                 }
             }
-            else if (strength > STT && direction > 0)
+            else if (ASRZ.DoesZoneStrengthComply(ASRZ.GetCurrentZone(), ">", STT) && direction == 1)
             {
                 if (Position.MarketPosition == MarketPosition.Flat) // if we have no open positions
                 {
@@ -1401,21 +1400,6 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
 
-        /*
-            if (ScaleHalf)
-            {
-            if (limitOrder != null)
-            ChangeOrder(limitOrder, limitOrder.Quantity, Close[0], 0);
-            if (limitOrderHalf != null)
-            ChangeOrder(limitOrderHalf, limitOrderHalf.Quantity, Close[0], 0);
-            }
-            else
-            {
-            if (limitOrder != null)
-            ChangeOrder(limitOrder, limitOrder.Quantity, Close[0], 0);
-            }
-
-        */
         public Tuple<string> GetGapStatus()
         {
             return Tuple.Create("");
@@ -1760,12 +1744,12 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
 
 
-                    if (ASRZ.LINKLIST.Count > 0 + TradeDelay)
+                    if (ASRZ.ZoneBoxList.Count > 0 + TradeDelay)
                     {
 
                         if (UseZoneStrengthOrderMultiplier)
                         {
-                            orderMultiplier = Math.Floor(ZoneStrengthOrderScale * Math.Log(ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].Strength + 1)) / 100;
+                            orderMultiplier = Math.Floor(ZoneStrengthOrderScale * Math.Log(ASRZ.GetZoneStrength(ASRZ.GetCurrentZone()) + 1)) / 100;
                         }
 
                         // If the order was designated to use an SMA as a stoploss, this function updates the order
@@ -1811,8 +1795,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                             }
                         }
 
-                        
-                        if (ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1].NumFullTradingDays > 20 && ASRZ.LINKLIST[ASRZ.LINKLIST.Count - 1 - TradeDelay].ZonesAbove == 0 && Position.MarketPosition == MarketPosition.Flat) //  if there is no resistance
+                        if (ASRZ.GetNumberOfFullTradingDays() > 20 && ASRZ.WasZeroResX(0) && Position.MarketPosition == MarketPosition.Flat) //  if there is no resistance
                         {
                             double currentAsk = GetCurrentAsk();
                             var lp = currentAsk + (currentAsk * 0.05);
@@ -1828,8 +1811,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 GoLongNoResistance(sp, sph, lp, lph, true, 200, 200);
                             }
                         }
-                        
-                        
+
                         TryZoneOrders();
                     }
                 }
