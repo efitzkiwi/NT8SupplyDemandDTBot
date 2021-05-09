@@ -115,6 +115,16 @@ NEW IDEA:
 		Market sentiment
 		Candle patterns
 
+
+
+
+NEW STATISTICS IDEA:
+	FIND SKINNY ZONES AND MERGE THEM
+	IF TWO ZONES ARE BELOW THE AVG ZONE HEIGHT "SIZE" MINUS SOME STANDARD DEVIATION
+		AND IF YOU MERGE THE ZONES AND THE NEW CREATED ZONE IS **NO GREATER THAN THE AVG ZONE HEIGHT PLUS SOME STANDARD DEVIATION**
+		MERGE THE ZONES TOGETHER USING THE HIGHER TOP AS NEW TOP AND LOWER LOW AS NEW LOW
+		https://www.tutorialspoint.com/statistics/individual_series_standard_deviation.htm
+
 */
 
 //This namespace holds Indicators in this folder and is required. Do not change it. 
@@ -137,12 +147,106 @@ namespace NinjaTrader.NinjaScript.Indicators
 		}
 	}
 
+	/// <summary>
+	/// Useful so we don't need to deep copy the entire box to get statistics
+	/// </summary>
+	public class ZBSHandler
+	{
+		public int ActiveLeftSideAbsBar { get; set; }
+		public int ActiveRightSideAbsBar { get; set; }
+		public int OriginalLeftSideAbsBar { get; set; }
+		public int OriginalRightSideAbsBar { get; set; }
+		public double TopPrice { get; set; }
+		public double BottomPrice { get; set; }
+		public double DailyVolumePeak { get; set; }
+		public double DailyVolumePeakPrice { get; set; }
+		public double TotalVolumePeak { get; set; }
+		public double TotalVolumePeakPrice { get; set; }
+		public double TotalVolumeLow { get; set; }
+		public double TotalVolumeLowPrice { get; set; }
+		public double Strength { get; set; }
+		public double DailyVolumeWeightedAverageVolPrice { get; set; }
+		public int ID { get; set; }
+		public int Type { get; set; }
+		public ZBSHandler(ZoneBox box)
+		{
+			ActiveLeftSideAbsBar = box.ActiveLeftSideAbsBar;
+			ActiveRightSideAbsBar = box.ActiveRightSideAbsBar;
+			OriginalLeftSideAbsBar = box.OriginalLeftSideAbsBar;
+			OriginalRightSideAbsBar = box.OriginalRightSideAbsBar;
+			TopPrice = box.TopPrice;
+			BottomPrice = box.BottomPrice;
+			DailyVolumePeak = box.DailyVolumePeak;
+			DailyVolumePeakPrice = box.DailyVolumePeakPrice;
+			TotalVolumePeak = box.TotalVolumePeak;
+			TotalVolumePeakPrice = box.TotalVolumePeakPrice;
+			TotalVolumeLow = box.TotalVolumeLow;
+			TotalVolumeLowPrice = box.TotalVolumeLowPrice;
+			Strength = box.Strength;
+			BottomPrice = box.BottomPrice;
+			DailyVolumeWeightedAverageVolPrice = box.DailyVolumeWeightedAverageVolPrice;
+		}
+	}
+	public class ZoneBoxStatistics
+	{
+		public Dictionary<int, ZBSHandler> ZoneBoxArchive;
+		public List<double> TopPriceMinusBottomPrice;
+		public double HeightStandardDeviation { get; set; }
+		public double HeightAverage { get; set; }
+		public double AverageTimeAlive { get; set; }
+		public ZoneBoxStatistics()
+		{
+			ZoneBoxArchive = new Dictionary<int, ZBSHandler>();
+			TopPriceMinusBottomPrice = new List<double>();
+			HeightAverage = 0;
+			AverageTimeAlive = 0;
+		}
+		public void UpdateArchive(ZoneBox box)
+		{
+			if (!ZoneBoxArchive.ContainsKey(box.ID))
+			{
+				ZoneBoxArchive.Add(box.ID, new ZBSHandler(box));
+			}
+			else
+			{
+				ZoneBoxArchive[box.ID] = new ZBSHandler(box);
+			}
+		}
+		public void CalculateStatistics()
+		{
+			CalculateAverageBoxHeight(); // set avg box height and standard deviation
+
+		}
+		public void CalculateAverageBoxHeight()
+		{
+			if (ZoneBoxArchive.Count == 0) return;
+			double height = 0;
+			TopPriceMinusBottomPrice.Clear();
+			double diff = 0;
+			foreach (KeyValuePair<int, ZBSHandler> group in ZoneBoxArchive)
+			{
+				diff = group.Value.TopPrice - group.Value.BottomPrice;
+				height += diff;
+				TopPriceMinusBottomPrice.Add(diff);
+			}
+			HeightAverage = height / ZoneBoxArchive.Count;
+
+			diff = 0;
+			foreach(double d in TopPriceMinusBottomPrice)
+			{
+				diff += Math.Pow((d - HeightAverage), 2);
+			}
+			HeightStandardDeviation = Math.Sqrt(diff / TopPriceMinusBottomPrice.Count);
+		}
+	}
+
 	public class ZoneBox
 	{
 		private readonly AdvancedSRZones indicatorObjectRef;
 		private Brush outlineColor = Brushes.SlateGray;
 		private Brush areaColor = Brushes.Green;
 		private double opacity = 50;
+		// STATISTICS
 		public double DailyVolumePeak { get; set; }
 		public double DailyVolumePeakPrice { get; set; }
 		public double TotalVolumePeak { get; set; }
@@ -151,30 +255,37 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public double TotalVolumeLowPrice { get; set; }
 		public bool IsPriceInside { get; set; }
 		public double Strength { get; set; }
-		public int activeLeftSideAbsBar { get; set; }
-		public int activeRightSideAbsBar { get; set; }
-		public int originalLeftSideAbsBar { get; set; }
-		public int originalRightSideAbsBar { get; set; }
-		public double topPrice { get; set; }
-		public double bottomPrice { get; set; }
-		public bool isActive { get; set; }
-		public double totalVolume { get; set; }
+		public int ActiveLeftSideAbsBar { get; set; }
+		public int ActiveRightSideAbsBar { get; set; }
+		public int OriginalLeftSideAbsBar { get; set; }
+		public int OriginalRightSideAbsBar { get; set; }
+		public double TopPrice { get; set; }
+		public double BottomPrice { get; set; }
+		public bool IsActive { get; set; }
+		public double TotalVolume { get; set; }
+		private int SMAPeriodForCross { get; set; }
+		private bool TrackingIntradayResBreak { get; set; }
+		private bool TrackingIntradaySupBreak { get; set; }
+		private int IntradayResBreakCount { get; set; }
+		private int IntradaySupBreakCount { get; set; }
+		public int LastIntradayBreakAbsBar { get; set; }
+		public double DailyVolumeWeightedAverageVolPrice { get; set; } // calculate EOD
 		public int ID { get; set; }
-		public int type { get; set; } // 0 = supp 1 = res
+		public int Type { get; set; } // 0 = supp 1 = res
 		public List<List<double>> DailyVolumeArray;
 		public SortedDictionary<double, double> TotalVolumeDictionary;
 		public ZoneBox(AdvancedSRZones obj, int LSAB, int RSAB, double TP, double BP)
 		{
 			indicatorObjectRef = obj;
-			originalLeftSideAbsBar = activeLeftSideAbsBar = LSAB;
-			originalRightSideAbsBar = activeRightSideAbsBar = RSAB;
-			topPrice = TP;
-			bottomPrice = BP;
-			if (topPrice < bottomPrice)
+			OriginalLeftSideAbsBar = ActiveLeftSideAbsBar = LSAB;
+			OriginalRightSideAbsBar = ActiveRightSideAbsBar = RSAB;
+			TopPrice = TP;
+			BottomPrice = BP;
+			if (TopPrice < BottomPrice)
 			{
-				var b = bottomPrice;
-				bottomPrice = topPrice;
-				topPrice = b;
+				var b = BottomPrice;
+				BottomPrice = TopPrice;
+				TopPrice = b;
 			}
 			ID = obj.globalIDStep.GetCount();
 			DailyVolumeArray = new List<List<double>>();
@@ -183,33 +294,47 @@ namespace NinjaTrader.NinjaScript.Indicators
 			TotalVolumeLow = double.MaxValue;
 			TotalVolumeLowPrice = 0;
 			TotalVolumeDictionary = new SortedDictionary<double, double>();
-			totalVolume = 0;
+			TotalVolume = 0;
+			SMAPeriodForCross = 20;
+			TrackingIntradayResBreak = false;
+			TrackingIntradaySupBreak = false;
+			IntradayResBreakCount = 0;
+			IntradaySupBreakCount = 0;
+			LastIntradayBreakAbsBar = 0;
+			Strength = 100;
 			UpdateBox();
 		}
+
 		public void DisplayBox()
 		{
-			if (type == 0) areaColor = Brushes.Green;
-			else if (type == 1) areaColor = Brushes.Red;
-			Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.CurrentBar - activeLeftSideAbsBar, bottomPrice, indicatorObjectRef.CurrentBar - activeRightSideAbsBar, topPrice, outlineColor, areaColor, (int)opacity, true);
+			if (Type == 0) areaColor = Brushes.Green;
+			else if (Type == 1) areaColor = Brushes.Red;
+			Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.CurrentBar - ActiveLeftSideAbsBar, BottomPrice, indicatorObjectRef.CurrentBar - ActiveRightSideAbsBar, TopPrice, outlineColor, areaColor, (int)opacity, true);
 
 		}
 
 		public void UpdateBox()
 		{
-			// todo do more with this
-			Strength = 100;
 			if (indicatorObjectRef.Bars.IsFirstBarOfSession)
 			{
-				totalVolume = 0;
+				// reset intraday utilities
+				TotalVolume = 0;
+				TrackingIntradayResBreak = false;
+				TrackingIntradaySupBreak = false;
+				IntradayResBreakCount = 0;
+				IntradaySupBreakCount = 0;
+				LastIntradayBreakAbsBar = 0;
+
 			}
-			if (topPrice < bottomPrice)
+			if (TopPrice < BottomPrice)
 			{
-				var b = bottomPrice;
-				bottomPrice = topPrice;
-				topPrice = b;
+				var b = BottomPrice;
+				BottomPrice = TopPrice;
+				TopPrice = b;
 			}
-			activeRightSideAbsBar = indicatorObjectRef.CurrentBar;
-			if (indicatorObjectRef.GetCurrentAsk() >= bottomPrice && indicatorObjectRef.GetCurrentAsk() <= topPrice)
+			// set type of zone
+			ActiveRightSideAbsBar = indicatorObjectRef.CurrentBar;
+			if (indicatorObjectRef.GetCurrentAsk() >= BottomPrice && indicatorObjectRef.GetCurrentAsk() <= TopPrice)
 			{
 				IsPriceInside = true;
 			}
@@ -217,20 +342,64 @@ namespace NinjaTrader.NinjaScript.Indicators
 			{
 				IsPriceInside = false;
 			}
-			if (indicatorObjectRef.GetCurrentAsk() >= bottomPrice)
+			if (indicatorObjectRef.GetCurrentAsk() >= BottomPrice)
 			{
-				type = 0;
+				Type = 0;
 			}
-			else if (indicatorObjectRef.GetCurrentAsk() <= topPrice)
+			else if (indicatorObjectRef.GetCurrentAsk() <= TopPrice)
 			{
-				type = 1;
+				Type = 1;
 			}
+			// handler for intraday zone breaks
+			if (indicatorObjectRef.CurrentBar > SMAPeriodForCross + 2)
+			{
+
+				if (indicatorObjectRef.SMA(SMAPeriodForCross)[2] < BottomPrice && indicatorObjectRef.SMA(SMAPeriodForCross)[1] < BottomPrice && indicatorObjectRef.SMA(SMAPeriodForCross)[0] >= BottomPrice)
+				{
+					TrackingIntradayResBreak = true;
+				}
+				else if (indicatorObjectRef.SMA(SMAPeriodForCross)[2] > TopPrice && indicatorObjectRef.SMA(SMAPeriodForCross)[1] > TopPrice && indicatorObjectRef.SMA(SMAPeriodForCross)[0] <= TopPrice)
+				{
+					TrackingIntradaySupBreak = true;
+				}
+
+				if (TrackingIntradayResBreak)
+				{
+					if (indicatorObjectRef.SMA(SMAPeriodForCross)[0] < BottomPrice)
+					{
+						TrackingIntradayResBreak = false;
+					}
+					else if (indicatorObjectRef.SMA(SMAPeriodForCross)[0] > TopPrice)
+					{
+						TrackingIntradayResBreak = false;
+						IntradayResBreakCount++;
+						LastIntradayBreakAbsBar = indicatorObjectRef.CurrentBar;
+						Draw.TriangleUp(indicatorObjectRef, "up " + LastIntradayBreakAbsBar, true, indicatorObjectRef.Bars.GetTime(LastIntradayBreakAbsBar-1), TopPrice, Brushes.LawnGreen);
+					}
+
+				}
+				else if (TrackingIntradaySupBreak && indicatorObjectRef.SMA(SMAPeriodForCross)[0] < BottomPrice)
+				{
+					if (indicatorObjectRef.SMA(SMAPeriodForCross)[0] > TopPrice)
+					{
+						TrackingIntradaySupBreak = false;
+					}
+					else if (indicatorObjectRef.SMA(SMAPeriodForCross)[0] < BottomPrice)
+					{
+						TrackingIntradaySupBreak = false;
+						IntradaySupBreakCount++;
+						LastIntradayBreakAbsBar = indicatorObjectRef.CurrentBar;
+						Draw.TriangleDown(indicatorObjectRef, "up " + LastIntradayBreakAbsBar, true, indicatorObjectRef.Bars.GetTime(LastIntradayBreakAbsBar-1), BottomPrice, Brushes.Maroon);
+					}
+				}
+			}
+			// end
 			// don't really know if volume occured in the zone recently, so just brute force it. A bit slow
 			double price;
 			for (int i = 0; i < indicatorObjectRef.priceHitsArray.GetLength(1); i++)
 			{
 				price = indicatorObjectRef.priceHitsArray[0, i];
-				if (price <= topPrice && price >= bottomPrice)
+				if (price <= TopPrice && price >= BottomPrice)
 				{
 					if (indicatorObjectRef.priceHitsArray[1, i] > TotalVolumePeak)
 					{
@@ -263,6 +432,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 				}
 			}
 		}
+		public double GetHeight()
+		{
+			return Math.Abs(TopPrice - BottomPrice);
+		}
+		public int GetTotalIntradayBreakCount()
+		{
+			return IntradayResBreakCount + IntradaySupBreakCount;
+		}
 		public double GetDailyVolume()
 		{
 			double price;
@@ -270,17 +447,22 @@ namespace NinjaTrader.NinjaScript.Indicators
 			for (int i = 0; i < indicatorObjectRef.priceHitsArray.GetLength(1); i++)
 			{
 				price = indicatorObjectRef.priceHitsArray[0, i];
-				if (price <= topPrice && price >= bottomPrice)
+				if (price <= TopPrice && price >= BottomPrice)
 				{
 					sum += indicatorObjectRef.priceHitsArray[1, i];
 				}
 			}
 			return sum;
 		}
-		public bool IsPriceInsideBox()
+		/// <summary>
+		/// Is ASK inside box
+		/// </summary>
+		/// <returns></returns>
+		public bool IsCurrentAskInsideBox()
 		{
-			if (indicatorObjectRef.GetCurrentAsk() >= bottomPrice && indicatorObjectRef.GetCurrentAsk() <= topPrice && indicatorObjectRef.CurrentBar >= activeLeftSideAbsBar && indicatorObjectRef.CurrentBar <= activeRightSideAbsBar)
+			if (indicatorObjectRef.GetCurrentAsk() >= BottomPrice && indicatorObjectRef.GetCurrentAsk() <= TopPrice && indicatorObjectRef.CurrentBar >= ActiveLeftSideAbsBar && indicatorObjectRef.CurrentBar <= ActiveRightSideAbsBar)
 			{
+				Draw.Diamond(indicatorObjectRef, "inside " + indicatorObjectRef.CurrentBar, true, indicatorObjectRef.Bars.GetTime(indicatorObjectRef.CurrentBar), indicatorObjectRef.GetCurrentAsk(), Brushes.Blue);
 				return true;
 			}
 			return false;
@@ -319,6 +501,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		public List<bool> ZonesAboveExtrema = new List<bool>();
 		public List<bool> ZonesBelowExtrema = new List<bool>();
+		public Dictionary<int, double> HighOfDayDict = new Dictionary<int, double>();
+		public Dictionary<int, double> LowOfDayDict = new Dictionary<int, double>();
 
 		double zonesAboveTemp = 0;
 		double zonesBelowTemp = 0;
@@ -343,7 +527,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 		double AvgArea = 40;
 		public List<ZoneBox> ZoneBoxList = new List<ZoneBox>();
 		public IDStep globalIDStep = new IDStep();
-
+		public Series<double> evolvingBottom;
+		public Series<double> evolvingPeak;
+		public Series<double> evolvingTop;
+		private ZoneBoxStatistics ZBoxStatistics;
 
 		protected override void OnStateChange()
 		{
@@ -388,10 +575,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 				//AddDataSeries(BarsPeriodType.Minute, 1);
 				priceHitsArray = new double[2, TotalSlots];
 				brushColor = Brushes.Red;
+				ZBoxStatistics = new ZoneBoxStatistics();
+
 			}
 			else if (State == State.Historical)
 			{
 				SetZOrder(-1); // default here is go below the bars and called in State.Historical
+			}
+			else if (State == State.DataLoaded)
+			{
+				evolvingBottom = new Series<double>(this,MaximumBarsLookBack.Infinite);
+				evolvingPeak = new Series<double>(this, MaximumBarsLookBack.Infinite);
+				evolvingTop = new Series<double>(this, MaximumBarsLookBack.Infinite);
 			}
 		}
 
@@ -412,6 +607,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 				{
 					ZoneBoxList[i].UpdateBox();
 					ZoneBoxList[i].DisplayBox();
+					// Perform statistics calculations
+					ZBoxStatistics.UpdateArchive(ZoneBoxList[i]);
 				}
 
 
@@ -489,7 +686,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 									if (Bars.GetLow(validPointExtrema - 1) < Bars.GetLow(validPointExtrema)) validPointExtrema = validPointExtrema - 1;
 									Draw.Diamond(this, "Inflection pt up extrema " + validPointExtrema, true, Bars.GetTime(validPointExtrema), Bars.GetLow(validPointExtrema), Brushes.LightGreen);
 									//Draw.Rectangle(this, "Inflection pt box " + validPointExtrema, true, CurrentBar - validPointExtrema, Bars.GetLow(validPointExtrema), CurrentBar - (int)InflectionPoints[i][0], Bars.GetLow((int)InflectionPoints[i][0]), outlineColor, areaColor, 80);
-									ZoneBoxList.Add(new ZoneBox(this, validPointExtrema, (int)bar, Math.Min(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema)), Math.Max(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema))));
+									//SMA(periodI)[CurrentBar-validPointExtrema]
+									ZoneBoxList.Add(new ZoneBox(this, validPointExtrema, (int)bar, Math.Max(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema)), Math.Max(Bars.GetLow((int)bar), Bars.GetLow(validPointExtrema))));
 
 								}
 							}
@@ -562,9 +760,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 					dayLastBar = CurrentBar;
 					NumFullTradingDays++;
+					HighOfDayDict.Add(Bars.GetBar(dayHighTime), dayHigh);
+					LowOfDayDict.Add(Bars.GetBar(dayLowTime), dayLow);
 
-
-
+					// HOD and LOD zoneboxes
 					int validPointExtrema = 0;
 					Draw.Diamond(this, "LOD " + CurrentBar, true, dayLowTime, dayLow, Brushes.DarkSeaGreen);
 					for (int i = Bars.GetBar(dayLowTime) - 5; i < Bars.GetBar(dayLowTime) + 5; i++)
@@ -602,20 +801,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 					// Organize, clean, and remove the trash repetitive zones created during the day. Clutter is our enemy.
 					// We get the price where the most volume occured inside each box
-
-
-
 					for (int box = ZoneBoxList.Count - 1; box >= 0; box--)
 					{
 						ZoneBoxList[box].DailyVolumeArray.Clear();
-						if (ZoneBoxList[box].originalLeftSideAbsBar >= dayStartBar && ZoneBoxList[box].originalLeftSideAbsBar <= dayLastBar)
+						if (ZoneBoxList[box].OriginalLeftSideAbsBar >= dayStartBar && ZoneBoxList[box].OriginalLeftSideAbsBar <= dayLastBar)
 						{
 							// get the number of zones above or below
-							if (GetCurrentAsk() <= ZoneBoxList[box].topPrice || GetCurrentAsk() <= ZoneBoxList[box].bottomPrice)
+							if (GetCurrentAsk() <= ZoneBoxList[box].TopPrice || GetCurrentAsk() <= ZoneBoxList[box].BottomPrice)
 							{
 								zonesAboveTemp++;
 							}
-							else if (GetCurrentAsk() >= ZoneBoxList[box].topPrice || GetCurrentAsk() >= ZoneBoxList[box].bottomPrice)
+							else if (GetCurrentAsk() >= ZoneBoxList[box].TopPrice || GetCurrentAsk() >= ZoneBoxList[box].BottomPrice)
 							{
 								zonesBelowTemp++;
 							}
@@ -632,15 +828,20 @@ namespace NinjaTrader.NinjaScript.Indicators
 								ZonesBelowToday = -1;
 								ZonesAboveToday = -1;
 							}
+							/*
+							 * CALCULATING DAILY VOLUME AT EOD FOR EACH BOX
+							 */
 							double maxVol = 0;
 							double maxVolPrice = 0;
 							bool didAdd = false;
+							double weightCounter = 0;
+							double weight = 0;
 							for (int volBar = 0; volBar < priceHitsArray.Length / 2; volBar++)
 							{
 								//Print(priceHitsArray[0, volBar] + " | " + priceHitsArray[0, volBar]);
 								//Draw.Line(this, "vol " + ZoneBoxList[box].ID + " " + priceHitsArray[0, volBar], false, Bars.GetTime(ZoneBoxList[box].activeLeftSideAbsBar), priceHitsArray[0, volBar], Bars.GetTime(ZoneBoxList[box].activeRightSideAbsBar), priceHitsArray[0, volBar], Brushes.Purple, DashStyleHelper.Dot, 2);
 
-								if (priceHitsArray[0, volBar] <= ZoneBoxList[box].topPrice && priceHitsArray[0, volBar] >= ZoneBoxList[box].bottomPrice)
+								if (priceHitsArray[0, volBar] <= ZoneBoxList[box].TopPrice && priceHitsArray[0, volBar] >= ZoneBoxList[box].BottomPrice)
 								{
 									//Draw.Line(this, "vol " + ZoneBoxList[box].ID + " " + priceHitsArray[0, volBar], false, Bars.GetTime(ZoneBoxList[box].activeLeftSideAbsBar), priceHitsArray[1, volBar], Bars.GetTime(ZoneBoxList[box].activeRightSideAbsBar), priceHitsArray[1, volBar], Brushes.Purple, DashStyleHelper.Dot, 2);
 
@@ -651,7 +852,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 									}
 									ZoneBoxList[box].DailyVolumeArray.Add(new List<double>() { priceHitsArray[0, volBar], priceHitsArray[1, volBar] });
 									ZoneBoxList[box].DailyVolumePeak = maxVol;
-									ZoneBoxList[box].DailyVolumePeakPrice = maxVolPrice > 0 ? maxVolPrice : (ZoneBoxList[box].topPrice + ZoneBoxList[box].bottomPrice) / 2;
+									ZoneBoxList[box].DailyVolumePeakPrice = maxVolPrice > 0 ? maxVolPrice : (ZoneBoxList[box].TopPrice + ZoneBoxList[box].BottomPrice) / 2;
+									weight += priceHitsArray[0, volBar] * priceHitsArray[1, volBar];
+									weightCounter += priceHitsArray[1, volBar];
+									ZoneBoxList[box].DailyVolumeWeightedAverageVolPrice = weight / weightCounter;
 									didAdd = true;
 									//Print(maxVol + " | " + maxVolPrice);
 								}
@@ -659,10 +863,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 							if (didAdd == false)
 							{
 								ZoneBoxList[box].DailyVolumePeak = 0;
-								ZoneBoxList[box].DailyVolumePeakPrice = (ZoneBoxList[box].topPrice + ZoneBoxList[box].bottomPrice) / 2;
+								ZoneBoxList[box].DailyVolumePeakPrice = (ZoneBoxList[box].TopPrice + ZoneBoxList[box].BottomPrice) / 2;
+								ZoneBoxList[box].DailyVolumeWeightedAverageVolPrice = 0;
 							}
 							//Print(ZoneBoxList[box].dailyVolumePeakPrice + " | " + maxVolPrice);
-							Draw.Line(this, "max vol " + ZoneBoxList[box].ID, false, Bars.GetTime(ZoneBoxList[box].activeLeftSideAbsBar), ZoneBoxList[box].DailyVolumePeakPrice, Bars.GetTime(ZoneBoxList[box].activeRightSideAbsBar), ZoneBoxList[box].DailyVolumePeakPrice, Brushes.Purple, DashStyleHelper.Dot, 5);
+							Draw.Line(this, "max vol " + ZoneBoxList[box].ID, false, Bars.GetTime(ZoneBoxList[box].ActiveLeftSideAbsBar), ZoneBoxList[box].DailyVolumePeakPrice, Bars.GetTime(ZoneBoxList[box].ActiveRightSideAbsBar), ZoneBoxList[box].DailyVolumePeakPrice, Brushes.Purple, DashStyleHelper.Dot, 4);
+							Draw.Line(this, "dvwav " + ZoneBoxList[box].ID, false, Bars.GetTime(ZoneBoxList[box].ActiveLeftSideAbsBar), ZoneBoxList[box].DailyVolumeWeightedAverageVolPrice, Bars.GetTime(ZoneBoxList[box].ActiveRightSideAbsBar), ZoneBoxList[box].DailyVolumeWeightedAverageVolPrice, Brushes.Yellow, DashStyleHelper.Dot, 4);
 						}
 					}
 
@@ -672,44 +878,202 @@ namespace NinjaTrader.NinjaScript.Indicators
 					ZonesAboveToday = -1;
 					ZonesBelowToday = -1;
 
-					double peakPriceComparator = 1.0015;
-					foreach (ZoneBox box in ZoneBoxList.ToList())
-					{
-						foreach (ZoneBox box2 in ZoneBoxList.ToList())
-						{
-							if (box.ID != box2.ID)
-							{
-								// Condition one: if maximum daily volume price is within threshold
-								if ((box.DailyVolumePeakPrice <= box2.DailyVolumePeakPrice * peakPriceComparator && box.DailyVolumePeakPrice >= box2.DailyVolumePeakPrice * (1 / peakPriceComparator)))
-								{
-
-									// remove the zone with most volume
-									if (box.GetDailyVolume() > box2.GetDailyVolume())
-									{
-										//ZoneBoxList.RemoveAt(box--);
-										int id = box.ID;
-										RemoveDrawObject(id.ToString());
-										ZoneBoxList.RemoveAll(b => b.ID == id);
-									}
-									else if (box.GetDailyVolume() < box2.GetDailyVolume())
-									{
-										//ZoneBoxList.RemoveAt(box2--);
-										int id = box2.ID;
-										RemoveDrawObject(id.ToString());
-										ZoneBoxList.RemoveAll(b => b.ID == id);
-									}
-
-								}
-
-								// Condition two: 
-							}
-						}
-					}
+					// Merge zones close together
+					TryMergeZones();
 
 				}
 				ScuffedVolumeProfile();
 			}
 
+		}
+
+
+		/// <summary>
+		/// Merge zones in close proximity
+		/// </summary>
+		public void TryMergeZones()
+		{
+			double peakPriceComparator = 1.0015;
+			bool UseDailyVolPeakPriceMerge = true;
+			bool UseDailyVolWeightedAvgVolPriceMergeThres = true;
+			bool UseDailyVolWeightedAvgVolPriceMergeContainer = true;
+			ZBoxStatistics.CalculateStatistics();
+			//Print(ZBoxStatistics.HeightAverage + " | " + ZBoxStatistics.HeightStandardDeviation);
+			foreach (ZoneBox box in ZoneBoxList.ToList())
+			{
+				// if box was "broken" x number of times on the same day it was created, remove it
+				if (box.OriginalLeftSideAbsBar > dayStartBar && box.GetTotalIntradayBreakCount() > 1)
+				{
+					int id = box.ID;
+					RemoveDrawObject(id.ToString());
+					ZoneBoxList.RemoveAll(b => b.ID == id);
+					continue;
+				}
+
+				// check if a tiny zone can be refactored to touch HOD or LOD
+				if (box.GetHeight() < ZBoxStatistics.HeightAverage - ZBoxStatistics.HeightStandardDeviation / 2)
+				{
+					// do the bottom zones
+					if (box.TopPrice < dayLow)
+					{
+						double top = dayLow;
+						double bottom = box.BottomPrice;
+						if (top - bottom < ZBoxStatistics.HeightAverage + ZBoxStatistics.HeightStandardDeviation * 3)
+						{
+							//Draw.Line(this, "jnajs " + dayLowTime, false, dayLowTime, bottom, dayLowTime, top, "");
+							box.TopPrice = dayLow;
+						}
+					}
+					else if (box.BottomPrice > dayHigh)
+					{
+						double top = box.TopPrice;
+						double bottom = dayHigh;
+						if (top - bottom < ZBoxStatistics.HeightAverage + ZBoxStatistics.HeightStandardDeviation * 3)
+						{
+							//Draw.Line(this, "jnajs " + dayHighTime, false, dayHighTime, bottom, dayHighTime, top, "");
+							box.BottomPrice = dayHigh;
+						}
+					}
+				}
+
+				// use statistics to find the super small boxes
+				
+				foreach (ZoneBox box2 in ZoneBoxList.ToList())
+				{
+					if (box.ID != box2.ID)
+					{
+						// if box1 and box2 are tiny
+						if (box.GetHeight() < ZBoxStatistics.HeightAverage - ZBoxStatistics.HeightStandardDeviation/2 && box2.GetHeight() < ZBoxStatistics.HeightAverage - ZBoxStatistics.HeightStandardDeviation/2)
+						{
+							// make sure we have sufficient data
+							if (ZoneBoxList.Count > 10)
+							{
+								// find the one above
+								double bottom = box.TopPrice > box2.TopPrice ? box2.BottomPrice : box.BottomPrice;
+								double top = box.TopPrice > box2.TopPrice ? box.TopPrice : box2.TopPrice;
+								// if merging them doesn't make them massive
+								if (Math.Abs(top - bottom) < ZBoxStatistics.HeightAverage + ZBoxStatistics.HeightStandardDeviation)
+								{
+									// refactor the zones to merge them
+									box2.TopPrice = top;
+									box2.BottomPrice = bottom;
+									int id = box.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+							}
+							//Print(box.ID + " ... " + box2.ID);
+
+						}
+						// if the box is tiny
+						else if (box.GetHeight() < ZBoxStatistics.HeightAverage - ZBoxStatistics.HeightStandardDeviation)
+						{
+							// if the box is inside another box
+							if ((box.BottomPrice >= box2.BottomPrice && box.BottomPrice <= box2.TopPrice) || (box.TopPrice <= box2.TopPrice && box.TopPrice >= box2.BottomPrice))
+							{
+								// refactor and merge the box
+								int id = box.ID;
+								RemoveDrawObject(id.ToString());
+								ZoneBoxList.RemoveAll(b => b.ID == id);
+							}
+						}
+						/*
+						else if (box.BottomPrice > box2.TopPrice && (box.BottomPrice - box2.TopPrice < ZBoxStatistics.HeightAverage - ZBoxStatistics.HeightStandardDeviation / 2))
+						{
+							if (box.TopPrice - box2.BottomPrice < ZBoxStatistics.HeightAverage + ZBoxStatistics.HeightStandardDeviation)
+							{
+								double top = box.TopPrice;
+								double bottom = box2.BottomPrice;
+								int id = box.ID;
+								RemoveDrawObject(id.ToString());
+								ZoneBoxList.RemoveAll(b => b.ID == id);
+								id = box2.ID;
+								RemoveDrawObject(id.ToString());
+								ZoneBoxList.RemoveAll(b => b.ID == id);
+								ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, top, bottom));
+							}
+						}
+						*/
+						// Condition one: if maximum daily volume price is within threshold
+						if ( UseDailyVolPeakPriceMerge && (box.DailyVolumePeakPrice <= box2.DailyVolumePeakPrice * peakPriceComparator && box.DailyVolumePeakPrice >= box2.DailyVolumePeakPrice * (1 / peakPriceComparator)))
+						{
+
+							// remove the zone with most volume
+							if (box.GetDailyVolume() > box2.GetDailyVolume())
+							{
+								int id = box.ID;
+								RemoveDrawObject(id.ToString());
+								ZoneBoxList.RemoveAll(b => b.ID == id);
+							}
+							else if (box.GetDailyVolume() < box2.GetDailyVolume())
+							{
+								int id = box2.ID;
+								RemoveDrawObject(id.ToString());
+								ZoneBoxList.RemoveAll(b => b.ID == id);
+							}
+
+						}
+						// Condition two: if volume-weighted avg vol price is within threshold
+						if (UseDailyVolWeightedAvgVolPriceMergeThres && (box.DailyVolumeWeightedAverageVolPrice <= box2.DailyVolumeWeightedAverageVolPrice * peakPriceComparator && box.DailyVolumeWeightedAverageVolPrice >= box2.DailyVolumeWeightedAverageVolPrice * (1 / peakPriceComparator)))
+						{
+
+						}
+
+						// Condition three: if box1 volume-weighted avg vol price is inside box2
+						if (UseDailyVolWeightedAvgVolPriceMergeContainer && (box.DailyVolumeWeightedAverageVolPrice <= box2.TopPrice && box.DailyVolumeWeightedAverageVolPrice >= box2.BottomPrice)) 
+						{
+							// If box2 vol-weighted avg price is below the bottom evolving zone
+							if (box.DailyVolumeWeightedAverageVolPrice <= evolvingBottom[1])
+							{
+								// if box1 is above evbottom
+								if (box2.DailyVolumeWeightedAverageVolPrice > evolvingBottom[1])
+								{
+									int id = box2.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+								// if box1 is closer to evbottom than box2 is
+								else if (Math.Abs(box.DailyVolumeWeightedAverageVolPrice - evolvingBottom[1]) < Math.Abs(box2.DailyVolumeWeightedAverageVolPrice - evolvingBottom[1]))
+								{
+									int id = box2.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+								else
+								{
+									int id = box.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+							}
+							else if (box.DailyVolumeWeightedAverageVolPrice >= evolvingTop[1])
+							{
+								if (box2.DailyVolumeWeightedAverageVolPrice < evolvingTop[1])
+								{
+									int id = box2.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+								// if box1 is closer to evtop than box2 is
+								else if (Math.Abs(box.DailyVolumeWeightedAverageVolPrice - evolvingTop[1]) < Math.Abs(box2.DailyVolumeWeightedAverageVolPrice - evolvingTop[1]))
+								{
+									int id = box2.ID;
+									RemoveDrawObject(id.ToString());
+									ZoneBoxList.RemoveAll(b => b.ID == id);
+								}
+							}
+							// Take the box with vwavp closer to evolvingbottom
+						}
+
+
+						// Condition four: if box 2 volume-weighted avg vol price is inside box1
+						//if ()
+						//
+
+							// Condition two: 
+					}
+				}
+			}
 		}
 
 		private void ComputeHL()
@@ -726,6 +1090,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 				// Update high of day
 				dayHigh = Bars.GetHigh(CurrentBar);
 				dayHighTime = Bars.GetTime(CurrentBar);
+
 				//Draw.Diamond(this, "Day High: " + dayHigh.ToString() + " at " + dayHighTime, true, dayHighTime, dayHigh, Brushes.Red);
 			}
 		}
@@ -794,7 +1159,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		{
 			foreach (ZoneBox box in ZoneBoxList)
 			{
-				if (box.IsPriceInsideBox())
+				if (box.IsCurrentAskInsideBox())
 				{
 					return box;
 				}
@@ -811,7 +1176,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public int GetZoneType(ZoneBox box)
 		{
 			if (box == null) return -999;
-			return box.type;
+			return box.Type;
 		}
 
 		/// <summary>
@@ -841,6 +1206,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 				case "<=":
 					if (box.Strength <= st) return true;
 					break;
+				default:
+					return false;
+
 			}
 			return false;
 		}
@@ -937,15 +1305,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 					}
 					adj = TickSize;
 				}
-
-
-				// draw
-				if (Bars.IsLastBarOfSession)
+				evolvingBottom[0] = sessVAbot;
+				evolvingPeak[0] = maxPrice;
+				evolvingTop[0] = sessVAtop;
+				// only draw if it's real time or last bar of session to save performance
+				if (State == State.Realtime || Bars.IsLastBarOfSession)
 				{
-					Draw.Line(this, "vabot" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAbot, Bars.GetTime(CurrentBar), sessVAbot, "");
-					Draw.Line(this, "vatop" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAtop, Bars.GetTime(CurrentBar), sessVAtop, "");
-					Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxPrice, Bars.GetTime(CurrentBar), maxPrice, "");
+					Draw.Line(this, "vabot" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAbot, Bars.GetTime(CurrentBar), sessVAbot, Brushes.SkyBlue, DashStyleHelper.Solid, 2);
+					Draw.Line(this, "vatop" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), sessVAtop, Bars.GetTime(CurrentBar), sessVAtop, Brushes.LawnGreen, DashStyleHelper.Solid, 2);
+					Draw.Line(this, "max" + Time[0].Month + "/" + Time[0].Day, false, Bars.GetTime(dayStartBar), maxPrice, Bars.GetTime(CurrentBar), maxPrice, Brushes.Purple, DashStyleHelper.Solid, 2);
 				}
+
 			}
 		}
 
@@ -1002,14 +1372,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 					byte rt = 0; byte gt = 0; byte bt = 0; byte at = 0;
 					if (isFirstVolumeBar)
 					{
-						startPoint = new System.Windows.Point(ChartControl.GetXByBarIndex(ChartBars, ZoneBoxList[i].activeLeftSideAbsBar), chartScale.GetYByValue(group.Key)).ToVector2();
-						endPoint = new System.Windows.Point(ChartControl.GetXByBarIndex(ChartBars, ZoneBoxList[i].activeRightSideAbsBar), chartScale.GetYByValue(topD)).ToVector2();
+						startPoint = new System.Windows.Point(ChartControl.GetXByBarIndex(ChartBars, ZoneBoxList[i].ActiveLeftSideAbsBar), chartScale.GetYByValue(group.Key)).ToVector2();
+						endPoint = new System.Windows.Point(ChartControl.GetXByBarIndex(ChartBars, ZoneBoxList[i].ActiveRightSideAbsBar), chartScale.GetYByValue(topD)).ToVector2();
 						brushColor = new SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
 						dxBrush = brushColor.ToDxBrush(RenderTarget);
 						//Print(startPoint.X + " | " + endPoint.Y + " | " + (endPoint.X - startPoint.X) + " | " + (endPoint.Y - startPoint.Y) + " | " + r + " | " + g + " | " + b);
 						//RenderTarget.FillRectangle(new SharpDX.RectangleF(startPoint.X, endPoint.Y, endPoint.X - startPoint.X, Math.Abs(endPoint.Y - startPoint.Y)), dxBrush);
 					}
-					if (ZoneBoxList[i].type == 0) // support
+					if (ZoneBoxList[i].Type == 0) // support
 					{
 						//r = (byte)(int)Math.Floor((group.Value / BoxMaxVolume) * 255);
 						r = 0;
@@ -1019,7 +1389,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 						a = 200;
 
 					}
-					else if (ZoneBoxList[i].type == 1) // res
+					else if (ZoneBoxList[i].Type == 1) // res
 					{
 						r = 255;
 						//g = (byte)(int)Math.Floor((group.Value / BoxMaxVolume) * 255);

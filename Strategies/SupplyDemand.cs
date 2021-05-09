@@ -70,7 +70,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 
         double orderMultiplier = 1;
-        bool debugPrint = false;
+        bool debugPrint = true;
         bool debugDraw = false;
 
         // Unmanaged orders
@@ -160,8 +160,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 OrderFillResolution = OrderFillResolution.Standard;
                 Slippage = 0;
                 StartBehavior = StartBehavior.WaitUntilFlat;
-                TimeInForce = TimeInForce.Gtc;
-                TraceOrders = false;
+                TimeInForce = TimeInForce.Day;
+                TraceOrders = true;
                 RealtimeErrorHandling = RealtimeErrorHandling.StopCancelCloseIgnoreRejects;
                 StopTargetHandling = StopTargetHandling.PerEntryExecution;
                 BarsRequiredToTrade = 20;
@@ -462,7 +462,6 @@ namespace NinjaTrader.NinjaScript.Strategies
             int quantity, int filled, double averageFillPrice,
             Cbi.OrderState orderState, DateTime time, Cbi.ErrorCode error, string comment)
         {
-
             if (stopOrder != null && order == stopOrder && stopOrder.OrderState == OrderState.Cancelled)
             {
                 if (debugPrint) Print("ORDER_CANCEL: Stop " + stopOrder.Oco + " cancelled" + " time " + Time[0]);
@@ -693,7 +692,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             // SOMETHING TO REMEMBER: IF THESE DON'T FILL AT EOD FOR SOME REASON, WE HAVE A PROBLEM!!!
             if (Position.MarketPosition == MarketPosition.Flat) return;
             //if (debugPrint && limitOrder != null) Print("Invoke CancelAndFlattenAll for open position");
-            double price = longNames.Contains(currentOrderClassification) ? GetCurrentBid() : GetCurrentAsk();
+            double price = longNames.Contains(currentOrderClassification) ? GetCurrentBid() - GetCurrentBid()*0.05 : GetCurrentAsk() + GetCurrentAsk() * 0.05;
+            Print(price);
             if (ScaleHalf)
             {
                 if (limitOrder != null)
@@ -767,7 +767,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         public void GoShortSMACross()
         {
-
             shareQuantity = GetShareQuantity();
             double sp = Close[0] + (Close[0] * (0.095 / 100) * orderMultiplier);
             double lp = Close[0] - (Close[0] * (0.24 / 100) * orderMultiplier);
@@ -947,7 +946,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     if (IsInflection("Up", 3))
                     {
                         NewOCO = false;
-                        GoLongAfterExit = true;
+                        //GoLongAfterExit = true;
                         ExitViaLimitOrder(Close[0]);
                     }
 
@@ -968,7 +967,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     if (IsInflection("Down", 3)) 
                     {
                         NewOCO = false;
-                        GoShortAfterExit = true;
+                        //GoShortAfterExit = true;
                         ExitViaLimitOrder(Close[0]);
                     }
                     
@@ -1778,13 +1777,15 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 {
 
                                     //TryShortSMACross();
-                                    //GoShortSMACross();
+                                    GoShortSMACross();
+                                    return;
 
                                 }
                                 else if (IsRSIWithinXBars("10m", 3, ">", 69))
                                 {
                                     //TryShortSMACross();
-                                    //GoShortSMACross();
+                                    GoShortSMACross();
+                                    return;
                                 }
 
                             }
@@ -1792,6 +1793,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                             {
                                 //TryLongSMACross();
                                 GoLongSMACross();
+                                return;
                             }
                         }
 
@@ -1805,14 +1807,17 @@ namespace NinjaTrader.NinjaScript.Strategies
                             if (ASRZ.WasZeroResX(1))
                             {
                                 GoLongNoResistance(sp, sph, lp, lph, true, 20, 50);
+                                return;
                             }
                             else // first day of zero res in a while
                             {
                                 GoLongNoResistance(sp, sph, lp, lph, true, 200, 200);
+                                return;
                             }
                         }
 
                         TryZoneOrders();
+                        return;
                     }
                 }
 
