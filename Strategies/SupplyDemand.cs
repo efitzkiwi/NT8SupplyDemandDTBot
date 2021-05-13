@@ -170,13 +170,12 @@ namespace NinjaTrader.NinjaScript.Strategies
                 // Disable this property for performance gains in Strategy Analyzer optimizations
                 // See the Help Guide for additional information
                 IsInstantiatedOnEachOptimizationIteration = true;
-
                 // Indicator vars
                 AreaStrengthMultiplier = 1500;
                 TimeThreshold = 45; // Minutes
                 ProxyStrengthMultiplier = 500;
                 NewZoneStrength = 60;
-                ZoneTimeoutStrength = -1;
+                DaysToLoadZones = 50;
                 NewZoneTopMultiplier = 0.0045;
                 NewZoneBottomMultiplier = 0.008;
                 ResZoneColor = Brushes.Red;
@@ -219,7 +218,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             else if (State == State.DataLoaded)
             {
-                ASRZ = AdvancedSRZones(AreaStrengthMultiplier, TimeThreshold, ProxyStrengthMultiplier, NewZoneStrength, ZoneTimeoutStrength, NewZoneTopMultiplier, NewZoneBottomMultiplier, ResZoneColor, SupZoneColor, BreakStrengthMultiplier, UseVolAccumulation, Expiration, MaxMergeCount, MergeThreshold);
+                ASRZ = AdvancedSRZones(AreaStrengthMultiplier, TimeThreshold, ProxyStrengthMultiplier, NewZoneStrength, DaysToLoadZones, NewZoneTopMultiplier, NewZoneBottomMultiplier, ResZoneColor, SupZoneColor, BreakStrengthMultiplier, UseVolAccumulation, Expiration, MaxMergeCount, MergeThreshold);
                 AddChartIndicator(ASRZ);
                 RVOL = RelativeVolumeNT8(60, 2, 30);
                 AddChartIndicator(RVOL);
@@ -1884,24 +1883,28 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
         #region properties
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "Area strength threshold multiplier", Description = "Multiplies the minimum threshold required for zones to gain strength", Order = 1, GroupName = "Parameters")]
         public int AreaStrengthMultiplier
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
         [Display(Name = "Time Threshold", Description = "Amount of time in minutes the bot uses as a limit for adjusting integral zone strength", Order = 2, GroupName = "Parameters")]
         public int TimeThreshold
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "Proxy strength multiplier", Description = "Proximity of pivots in Ticks to determine where S/R level will be", Order = 3, GroupName = "Parameters")]
         public int ProxyStrengthMultiplier
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "New zone strength", Description = "Default pre-computed strength of a new zone. Equation is 5 * Sqrt ( input ) ", Order = 4, GroupName = "Parameters")]
@@ -1909,18 +1912,19 @@ namespace NinjaTrader.NinjaScript.Strategies
         { get; set; }
 
         [NinjaScriptProperty]
-        [Range(int.MinValue, int.MaxValue)]
-        [Display(Name = "Zone timeout strength", Description = "Pre-computed value added to a zone that fails to go above the strength threshold. Equation is - 5 * Sqrt ( (abs)input ) ", Order = 5, GroupName = "Parameters")]
-        public int ZoneTimeoutStrength
+        [Range(0, int.MaxValue)]
+        [Display(Name = "Days to load zones", Description = "How many days to load to calculate zones", Order = 5, GroupName = "Parameters")]
+        public int DaysToLoadZones
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "New zone top multiplier", Description = "Multiplier amount to extend the top of a new zone upon creation", Order = 6, GroupName = "Parameters")]
         public double NewZoneTopMultiplier
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "New zone bottom multiplier", Description = "Multiplier amount to extend the bottom of a new zone upon creation", Order = 7, GroupName = "Parameters")]
@@ -1952,12 +1956,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             set { SupZoneColor = Serialize.StringToBrush(value); }
         }
 
+
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
         [Display(Name = "$$$ amount to buy", Description = "Amount in $$$ to buy for ONE full order", Order = 10, GroupName = "Parameters")]
         public double AmountToBuy
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, 100)]
         [Display(Name = "Long zone strength", Description = "The cumulative strength of the current bar a zone is in that triggers a long order", Order = 11, GroupName = "Parameters")]
@@ -1965,31 +1971,34 @@ namespace NinjaTrader.NinjaScript.Strategies
         { get; set; }
 
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, 100)]
         [Display(Name = "Short zone strength", Description = "The cumulative strength of the current bar a zone is in that triggers a short order", Order = 12, GroupName = "Parameters")]
         public double ShortStrengthThreshold
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Display(Name = "Zone strength order multiplier", Description = "Adjusts stop loss and profit taking based on percieved zone strength upon entry condition. ", Order = 13, GroupName = "Parameters")]
         public bool UseZoneStrengthOrderMultiplier
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(50, 200)]
         [Display(Name = "Zone strength order scale", Description = "Adjusts the zone scale equation. Higher = wider stop losses and limit sells", Order = 14, GroupName = "Parameters")]
         public int ZoneStrengthOrderScale
         { get; set; }
 
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
         [Display(Name = "Break strength multiplier", Description = "Multiplier for threshold strength applied if a zone is broken", Order = 15, GroupName = "Parameters")]
         public double BreakStrengthMultiplier
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Display(Name = "Use volume accumulation", Description = "(Suggest TRUE) Factors in relative volume into zone strength calculation", Order = 16, GroupName = "Parameters")]
         public bool UseVolAccumulation
@@ -2022,35 +2031,35 @@ namespace NinjaTrader.NinjaScript.Strategies
         public double LongProfitPercent
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Trade delay", Description = "Delay each trade condition by X minutes", Order = 21, GroupName = "Parameters")]
         public int TradeDelay
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Delay exit (minutes)", Description = "Prevents rapid, unnecessary orders from firing in a tight area of zones", Order = 22, GroupName = "Parameters")]
         public int DelayExitMinutes
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Zone expiration", Description = "Number of days it takes for a bar to expire. -1 means they never expire", Order = 23, GroupName = "Parameters")]
         public int Expiration
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Max merge count", Description = "Maximum number of times a zone can be merged", Order = 24, GroupName = "Parameters")]
         public int MaxMergeCount
         { get; set; }
 
-
+        [Browsable(false)]
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Merge threshold", Description = "Merge threshold required for two zones to combine", Order = 25, GroupName = "Parameters")]
