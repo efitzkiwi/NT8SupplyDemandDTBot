@@ -172,6 +172,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 			Volume = volume;
 		}
 	}
+
 	public class CandleStatistics
 	{
 		public Dictionary<int, Candle> CandleArchive;
@@ -460,11 +461,19 @@ namespace NinjaTrader.NinjaScript.Indicators
 			SMA20 = 3,
 			SMA8 = 4
 		}
+		public enum Types
+		{
+			Demand = 0,
+			Supply = 1
+		}
 		private readonly AdvancedSRZones indicatorObjectRef;
 		private Brush OutLineColor = Brushes.SlateGray;
-		private Brush AreaColorRes = Brushes.Red;
-		private Brush AreaColorSup = Brushes.Green;
+		private Brush BaseOutline;
+		private Brush AreaColorRes;
+		private Brush AreaColorSup;
 		private double Opacity = 50;
+		private bool DeleteNextOpen;
+		private bool CheckNextDayActivity;
 		// STATISTICS
 		public double DailyVolumePeak { get; set; }
 		public double DailyVolumePeakPrice { get; set; }
@@ -500,6 +509,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public SortedDictionary<double, double> TotalVolumeDictionary;
 		public ZoneBox(AdvancedSRZones obj, int LSAB, int RSAB, double TP, double BP, int CAT=0, int CLAS=-1)
 		{
+			AreaColorRes = obj.ResZoneColor;
+			AreaColorSup = obj.SupZoneColor;
 			indicatorObjectRef = obj;
 			OriginalLeftSideAbsBar = ActiveLeftSideAbsBar = LSAB;
 			OriginalRightSideAbsBar = ActiveRightSideAbsBar = RSAB;
@@ -532,14 +543,34 @@ namespace NinjaTrader.NinjaScript.Indicators
 			DaysToLiveConditionCounter = -1;
 			Category = CAT;
 			Classification = CLAS;
+			CheckNextDayActivity = false;
+			BaseOutline = OutLineColor;
+			DeleteNextOpen = false;
 			UpdateBox();
 		}
 
-		public void DisplayBox()
+		public void DisplayBox(int opc = -1)
 		{
 			if (DaysAlive < 1) return;
-			if (Type == 0) Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.CurrentBar - ActiveLeftSideAbsBar, BottomPrice, indicatorObjectRef.CurrentBar - ActiveRightSideAbsBar, TopPrice, OutLineColor, AreaColorSup, (int)Opacity, true);
-			else if (Type == 1) Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.CurrentBar - ActiveLeftSideAbsBar, BottomPrice, indicatorObjectRef.CurrentBar - ActiveRightSideAbsBar, TopPrice, OutLineColor, AreaColorRes, (int)Opacity, true);
+			if (opc == -1)
+			{
+				if (CheckNextDayActivity)
+				{
+					OutLineColor = Brushes.Transparent;
+				}
+				else
+				{
+					OutLineColor = BaseOutline;
+					if (Type == (int)Types.Demand) Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.Bars.GetTime(ActiveLeftSideAbsBar), BottomPrice, indicatorObjectRef.Bars.GetTime(ActiveRightSideAbsBar), TopPrice, OutLineColor, AreaColorSup, (int)Opacity, true);
+					else if (Type == (int)Types.Supply) Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.Bars.GetTime(ActiveLeftSideAbsBar), BottomPrice, indicatorObjectRef.Bars.GetTime(ActiveRightSideAbsBar), TopPrice, OutLineColor, AreaColorRes, (int)Opacity, true);
+				}
+			}
+			else
+			{
+				OutLineColor = Brushes.Transparent;
+				Draw.Rectangle(indicatorObjectRef, ID.ToString(), true, indicatorObjectRef.Bars.GetTime(ActiveLeftSideAbsBar), BottomPrice, indicatorObjectRef.Bars.GetTime(ActiveRightSideAbsBar), TopPrice, OutLineColor, AreaColorSup, opc, true);
+				
+			}
 
 		}
 
@@ -548,7 +579,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 			AreaColorSup = areaSup;
 			AreaColorRes = areaRes;
 			OutLineColor = outline;
+			BaseOutline = outline;
 			Opacity = opac;
+		}
+
+		public void HideBox()
+		{
+			indicatorObjectRef.RemoveDrawObject(this.ID.ToString());
 		}
 
 		public void UpdateBox()
@@ -576,6 +613,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 			{
 
 				// reset intraday utilities
+				if (DeleteNextOpen)
+				{
+					int id = ID;
+					if (indicatorObjectRef.HideDrawObjects) indicatorObjectRef.RemoveDrawObject(id.ToString());
+					indicatorObjectRef.ZoneBoxList.RemoveAll(b => b.ID == id);
+				}
 				TotalVolume = 0;
 				TrackingIntradayResBreak = false;
 				TrackingIntradaySupBreak = false;
@@ -590,9 +633,28 @@ namespace NinjaTrader.NinjaScript.Indicators
 					indicatorObjectRef.ZoneBoxList.RemoveAll(b => b.ID == id);
 				}
 			}
-			if (indicatorObjectRef.Bars.IsLastBarOfSession && DaysToLive > 0 && GetTotalIntradayBreakCount() == 0)
+			// D
+			if (indicatorObjectRef.Bars.IsLastBarOfSession && DaysToLive > 0)
 			{
-				DaysToLive++;
+				if (GetTotalIntradayBreakCount() == 0)
+				{
+					DaysToLive++;
+					if (CheckNextDayActivity)
+					{
+						Opacity = Opacity * 2;
+						Strength = Strength * 2;
+					}
+					CheckNextDayActivity = false;
+				}
+				else if (GetTotalIntradayBreakCount() > 0)
+				{
+					DeleteNextOpen = true;
+					//if (CheckNextDayActivity) DeleteNextOpen = true;
+					Opacity = Opacity / 2;
+					Strength = Strength / 2;
+					CheckNextDayActivity = true;
+					DaysToLive++;
+				}
 			}
 			if (TopPrice < BottomPrice)
 			{
@@ -612,11 +674,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 			if (indicatorObjectRef.GetCurrentAsk() >= TopPrice && indicatorObjectRef.GetCurrentAsk() >= BottomPrice)
 			{
-				Type = 0;
+				Type = (int)Types.Demand;
 			}
 			else if (indicatorObjectRef.GetCurrentAsk() <= BottomPrice && indicatorObjectRef.GetCurrentAsk() <= TopPrice)
 			{
-				Type = 1;
+				Type = (int)Types.Supply;
 			}
 			// handler for intraday zone breaks
 			if (indicatorObjectRef.CurrentBar > SMAPeriodForCross + 2)
@@ -706,6 +768,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		}
 		public int GetTotalIntradayBreakCount()
 		{
+			if (GetDailyVolume() == 0) return 0;
 			return IntradayResBreakCount + IntradaySupBreakCount;
 		}
 		public double GetDailyVolume()
@@ -730,7 +793,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		{
 			if (indicatorObjectRef.GetCurrentAsk() >= BottomPrice && indicatorObjectRef.GetCurrentAsk() <= TopPrice && indicatorObjectRef.CurrentBar >= ActiveLeftSideAbsBar && indicatorObjectRef.CurrentBar <= ActiveRightSideAbsBar)
 			{
-				SolidColorBrush color = Type == 1 ? Brushes.Blue : Brushes.White;
+				SolidColorBrush color = Type == (int)Types.Supply ? Brushes.Blue : Brushes.White;
 				//Draw.Diamond(indicatorObjectRef, "inside " + indicatorObjectRef.CurrentBar, true, indicatorObjectRef.Bars.GetTime(indicatorObjectRef.CurrentBar), indicatorObjectRef.GetCurrentAsk(), color);
 				return true;
 			}
@@ -803,6 +866,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private ZoneBoxStatistics ZBoxStatistics;
 		public CandleStatistics CandleStats;
 
+		private bool hideZonesButtonClicked;
+		private bool hideEvolsButtonClicked;
+		private System.Windows.Controls.Button hideZonesButton;
+		private System.Windows.Controls.Button hideEvolsButton;
+		private System.Windows.Controls.Grid myGrid;
+
 		protected override void OnStateChange()
 		{
 
@@ -854,6 +923,54 @@ namespace NinjaTrader.NinjaScript.Indicators
 			else if (State == State.Historical)
 			{
 				SetZOrder(-1); // default here is go below the bars and called in State.Historical
+				if (UserControlCollection.Contains(myGrid))
+					return;
+
+				Dispatcher.InvokeAsync((() =>
+				{
+					myGrid = new System.Windows.Controls.Grid
+					{
+						Name = "MyCustomGrid",
+						HorizontalAlignment = HorizontalAlignment.Right,
+						VerticalAlignment = VerticalAlignment.Top
+					};
+
+					System.Windows.Controls.ColumnDefinition column1 = new System.Windows.Controls.ColumnDefinition();
+
+					myGrid.ColumnDefinitions.Add(column1);
+
+					hideZonesButton = new System.Windows.Controls.Button
+					{
+						Name = "HideZones",
+						Content = "HideZones",
+						Foreground = Brushes.White,
+						Background = Brushes.CornflowerBlue
+					};
+
+
+					hideZonesButton.Click += OnButtonClick;
+
+					System.Windows.Controls.Grid.SetColumn(hideZonesButton, 0);
+
+					myGrid.Children.Add(hideZonesButton);
+
+					UserControlCollection.Add(myGrid);
+				}));
+			}
+			else if (State == State.Terminated)
+			{
+				Dispatcher.InvokeAsync((() =>
+				{
+					if (myGrid != null)
+					{
+						if (hideZonesButton != null)
+						{
+							myGrid.Children.Remove(hideZonesButton);
+							hideZonesButton.Click -= OnButtonClick;
+							hideZonesButton = null;
+						}
+					}
+				}));
 			}
 			else if (State == State.DataLoaded)
 			{
@@ -865,20 +982,55 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 		}
 
+		private void OnButtonClick(object sender, RoutedEventArgs rea)
+		{
+			System.Windows.Controls.Button button = sender as System.Windows.Controls.Button;
+			if (button == hideZonesButton && button.Name == "HideZones" && (button.Content).ToString() == "HideZones" && hideZonesButtonClicked == false)
+			{
+				button.Content = "ViewZones";
+				button.Name = "ViewZones";
+				hideZonesButtonClicked = true;
+				foreach (ZoneBox box in ZoneBoxList)
+				{
+					box.HideBox();
+				}
+				return;
+			}
+
+
+			if (button == hideZonesButton && button.Name == "ViewZones" && (button.Content).ToString() == "ViewZones" && hideZonesButtonClicked == true)
+			{
+				button.Content = "HideZones";
+				button.Name = "HideZones";
+				hideZonesButtonClicked = false;
+				foreach (ZoneBox box in ZoneBoxList)
+				{
+					box.DisplayBox();
+				}
+				return;
+			}
+
+		}
+
 
 		protected override void OnBarUpdate()
 		{
 
 			// Display high and low of each day
-
 			if (BarsInProgress == 1)
 			{
 				MasterDaysCount++;
 				//Print(ChartBars.Properties.DaysBack);
 				//Print(ChartBars.Properties.DaysBack + " | " + MasterDaysCount + " | " + DaysToLoadZones + " | " + BarsArray[1].Count);
-				if (ChartBars.Properties.DaysBack - (MasterDaysCount + (ChartBars.Properties.DaysBack - BarsArray[1].Count)) <= DaysToLoadZones) CanLoadZones = true;
+				if (ChartBars == null)
+				{
+					CanLoadZones = true;
+				}
+				else
+				{
+					if (ChartBars.Properties.DaysBack - (MasterDaysCount + (ChartBars.Properties.DaysBack - BarsArray[1].Count)) <= DaysToLoadZones) CanLoadZones = true;
+				}
 			}
-
 			if (CurrentBar >= 0 && BarsInProgress == 0 && CanLoadZones)
 			{
 
@@ -900,13 +1052,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 				}
 
 
-
 				if (Bars.IsFirstBarOfSession)
 				{
 					ResetSessionVars();
 					CreateDailySMALines();
 				}
-
 
 				// inflection points stuff
 				int periodI = 10;
@@ -1268,19 +1418,27 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		public void CreateDailySMALines()
 		{
-			if (BarsInProgress != 0) return;
-			if (BarsArray[1].Count < 1) return;
-			if (ChartBars.Properties.DaysBack < 200) return;
-			double MA200Price = SMA(BarsArray[1], 200)[0];
-			double MA100Price = SMA(BarsArray[1], 100)[0];
-			double MA50Price = SMA(BarsArray[1], 50)[0];
-			double MA20Price = SMA(BarsArray[1], 20)[0];
-			double MA8Price = SMA(BarsArray[1], 8)[0];
-			ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA200Price, MA200Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA200));
-			ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA100Price, MA100Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA100));
-			ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA50Price, MA50Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA50));
-			ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA20Price, MA20Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA20));
-			ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA8Price, MA8Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA8));
+			try
+			{
+				if (ChartBars == null) return;
+				if (BarsInProgress != 0) return;
+				if (BarsArray[1].Count < 1) return;
+				if (ChartBars.Properties.DaysBack < 200) return;
+				double MA200Price = SMA(BarsArray[1], 200)[0];
+				double MA100Price = SMA(BarsArray[1], 100)[0];
+				double MA50Price = SMA(BarsArray[1], 50)[0];
+				double MA20Price = SMA(BarsArray[1], 20)[0];
+				double MA8Price = SMA(BarsArray[1], 8)[0];
+				ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA200Price, MA200Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA200));
+				ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA100Price, MA100Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA100));
+				ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA50Price, MA50Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA50));
+				ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA20Price, MA20Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA20));
+				ZoneBoxList.Add(new ZoneBox(this, dayStartBar, CurrentBar, MA8Price, MA8Price, (int)ZoneBox.Categories.SMA, (int)ZoneBox.Classifications.SMA8));
+			}
+			catch(Exception e)
+			{
+				Print(e);
+			}
 		}
 
 
@@ -1567,6 +1725,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		public ZoneBox GetCurrentZone()
 		{
+			if (ZoneBoxList.Count < 1) return null;
 			foreach (ZoneBox box in ZoneBoxList)
 			{
 				if (box.IsCurrentAskInsideBox())
