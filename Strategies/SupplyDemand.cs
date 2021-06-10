@@ -124,6 +124,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         bool cfa = false;
         double[] IsGap = { 0.0, 0.0, 0.0 }; //   Gap type(0=none1=up2=down) , last price , this price
         double PriceAdjustedDailySMASlope = 0;
+        int NumFullTradingDays = 0;
+        
 
         double longRSIProfitMaximizationThreshold = 0.009;
         double longSMACROSSProfitMaximizationThreshold = 0.011;
@@ -138,6 +140,14 @@ namespace NinjaTrader.NinjaScript.Strategies
         double shortNOWALLSProfitMaximizationThreshold = 0.01;
 
         int vwapBounceOrderType = VWAPBouncePrices.None;
+
+        int vwapStopPrice = VWAPBounceTypes.None;
+        int vwapConditionCount = 0;
+        bool useVwapConditionalStop = false;
+        int vwapConditionTarget = 0;
+
+        private Series<ZoneBox> ActiveZones;
+        private Series<Double[]> SlopeOfSlope;
 
         List<Orderz> OrderManager = new List<Orderz>();
 
@@ -165,7 +175,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 TraceOrders = false;
                 RealtimeErrorHandling = RealtimeErrorHandling.StopCancelCloseIgnoreRejects;
                 StopTargetHandling = StopTargetHandling.PerEntryExecution;
-                BarsRequiredToTrade = 20;
+                BarsRequiredToTrade = 1;
                 // Disable this property for performance gains in Strategy Analyzer optimizations
                 // See the Help Guide for additional information
                 IsInstantiatedOnEachOptimizationIteration = true;
@@ -186,10 +196,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 ZoneStrengthOrderScale = 100;
                 BreakStrengthMultiplier = -2200;
                 UseVolAccumulation = true;
-                ShortStopLossPercent = 0.6;
-                LongStopLossPercent = 1.3;
-                ShortProfitPercent = 1.5;
-                LongProfitPercent = 1.7;
+                ShortStopLossPercent = 0.2;
+                LongStopLossPercent = 0.3;
+                ShortProfitPercent = 0.7;
+                LongProfitPercent = 0.8;
                 TradeDelay = 0; //minutes
                 DelayExitMinutes = 0;
                 Expiration = 60;
@@ -230,8 +240,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 sma20m = SMA(20);
                 sma50m = SMA(50);
                 LRSDaily = LinRegSlope(BarsArray[2], 20);
-
+                ActiveZones = new Series<ZoneBox>(this, MaximumBarsLookBack.Infinite);
+                SlopeOfSlope = new Series<Double[]>(this, MaximumBarsLookBack.Infinite);
                 sessIter = new SessionIterator(Bars);
+
                 // add new types of orders here
                 OrderManager.Add(new Orderz
                 {
@@ -754,7 +766,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         /// <summary>
         /// Go long vwap with default stops/limits
         /// </summary>
-        public void GoLongVWAP(int vwbt)
+        public int GoLongVWAP(int vwbt, bool useVwAsStop = false, int conditionTarget = 2)
         {
             vwapBounceOrderType = vwbt;
             shareQuantity = GetShareQuantity();
@@ -763,24 +775,34 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] - (Close[0] * (LongStopLossPercent / 200) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (LongProfitPercent / 200) * orderMultiplier) : 0;
             //Print(orderMultiplier + " | " + Close[0]);
+            if (useVwAsStop)
+            {
+                UseVwapConditionalStop(conditionTarget);
+            }
             TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.VWAP, false);
+            return 1;
         }
 
         /// <summary>
         /// Go Long vwap with custom stops/limits
         /// </summary>
-        public void GoLongVWAP(double stop, double stopH, double limit, double limitH, int vwbt, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoLongVWAP(double stop, double stopH, double limit, double limitH, int vwbt, bool useVwAsStop = false, int conditionTarget = 2, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             vwapBounceOrderType = vwbt;
             shareQuantity = GetShareQuantity();
+            if (useVwAsStop)
+            {
+                UseVwapConditionalStop(conditionTarget);
+            }
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.VWAP, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
         ///*
         /// <summary>
         /// Go short vwap with default stops/limits
         /// </summary>
-        public void GoShortVWAP(int vwbt)
+        public int GoShortVWAP(int vwbt, bool useVwAsStop = false, int conditionTarget = 2)
         {
             vwapBounceOrderType = vwbt;
             shareQuantity = GetShareQuantity();
@@ -789,17 +811,27 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] + (Close[0] * (ShortStopLossPercent / 200) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] - (Close[0] * (ShortProfitPercent / 200) * orderMultiplier) : 0;
             //Print(orderMultiplier + " | " + Close[0]);
+            if (useVwAsStop)
+            {
+                UseVwapConditionalStop(conditionTarget);
+            }
             TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.VWAP, false);
+            return 1;
         }
 
         /// <summary>
         /// Go short vwap with custom stops/limits
         /// </summary>
-        public void GoShortVWAP(double stop, double stopH, double limit, double limitH, int vwbt, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoShortVWAP(double stop, double stopH, double limit, double limitH, int vwbt, bool useVwAsStop = false, int conditionTarget = 2, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             vwapBounceOrderType = vwbt;
             shareQuantity = GetShareQuantity();
+            if (useVwAsStop)
+            {
+                UseVwapConditionalStop(conditionTarget);
+            }
             TrySubmitShortOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.VWAP, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
 
@@ -809,7 +841,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         /// <summary>
         /// Go short zone with default stops/limits
         /// </summary>
-        public void GoShortZone()
+        public int GoShortZone()
         {
             shareQuantity = GetShareQuantity();
             if (ActiveZoneBox != null) EntryZoneBox = ActiveZoneBox;
@@ -819,23 +851,25 @@ namespace NinjaTrader.NinjaScript.Strategies
             double lpH = ScaleHalf ? Close[0] - (Close[0] * (ShortProfitPercent / 200) * orderMultiplier) : 0;
             //Print(orderMultiplier + " | " + Close[0]);
             TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.Zone, false);
+            return 1;
         }
 
         /// <summary>
         /// Go short zone with custom stops/limits
         /// </summary>
-        public void GoShortZone(double stop, double stopH, double limit, double limitH, bool usesmasl=false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoShortZone(double stop, double stopH, double limit, double limitH, bool usesmasl=false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             if (ActiveZoneBox != null) EntryZoneBox = ActiveZoneBox;
             TrySubmitShortOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.Zone, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
 
         /// <summary>
         /// Go long zone with default stops/limits
         /// </summary>
-        public void GoLongZone()
+        public int GoLongZone()
         {
             shareQuantity = GetShareQuantity();
             if (ActiveZoneBox != null) EntryZoneBox = ActiveZoneBox;
@@ -845,19 +879,21 @@ namespace NinjaTrader.NinjaScript.Strategies
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (LongProfitPercent / 200) * orderMultiplier) : 0;
             //Print(orderMultiplier + " | " + Close[0]);
             TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.Zone, false);
+            return 1;
         }
 
         /// <summary>
         /// Go Long zone with custom stops/limits
         /// </summary>
-        public void GoLongZone(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoLongZone(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             if (ActiveZoneBox != null) EntryZoneBox = ActiveZoneBox;
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.Zone, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
-        public void GoShortSMACross()
+        public int GoShortSMACross()
         {
             shareQuantity = GetShareQuantity();
             double sp = Close[0] + (Close[0] * (0.095 / 100) * orderMultiplier);
@@ -865,16 +901,18 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] + (Close[0] * (0.06 / 100) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] - (Close[0] * (0.085 / 100) * orderMultiplier) : 0;
             TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross, false);
+            return 1;
 
         }
 
-        public void GoShortSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoShortSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
-        public void GoLongSMACross()
+        public int GoLongSMACross()
         {
             shareQuantity = GetShareQuantity();
             double sp = Close[0] - (Close[0] * (0.09 / 100) * orderMultiplier);
@@ -882,15 +920,17 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] - (Close[0] * (0.045 / 100) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (0.09 / 100) * orderMultiplier) : 0;
             TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross, true);
+            return 1;
         }
 
-        public void GoLongSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoLongSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross, usesmasl, smaslFast, smaslSlow);
+            return 1;
         }
 
-        public void GoLongInflectionPoint()
+        public int GoLongInflectionPoint()
         {
             shareQuantity = GetShareQuantity();
             double sp = Close[0] - (Close[0] * (0.05 / 100));
@@ -898,17 +938,19 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] - (Close[0] * (0.05 / 100)) : 0;
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (0.025 / 100)) : 0;
             TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.Inflection, false);
+            return 1;
 
         }
 
-        public void GoLongInflectionPoint(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoLongInflectionPoint(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.Inflection, usesmasl, smaslFast, smaslSlow);
+            return 1;
 
         }
 
-        public void GoShortInflectionPoint()
+        public int GoShortInflectionPoint()
         {
             shareQuantity = GetShareQuantity();
             double sp = Close[0] + (Close[0] * (0.095 / 100) * orderMultiplier);
@@ -916,18 +958,20 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] + (Close[0] * (0.06 / 100) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] - (Close[0] * (0.085 / 100) * orderMultiplier) : 0;
             TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.Inflection, false);
+            return 1;
 
         }
 
-        public void GoShortInflectionPoint(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoShortInflectionPoint(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             TrySubmitShortOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.Inflection, usesmasl, smaslFast, smaslSlow);
+            return 1;
 
         }
 
 
-        public void GoLongNoResistance()
+        public int GoLongNoResistance()
         {
             shareQuantity = GetShareQuantity();
             double sp = Close[0] - (Close[0] * (0.05 / 100));
@@ -935,20 +979,21 @@ namespace NinjaTrader.NinjaScript.Strategies
             double spH = ScaleHalf ? Close[0] - (Close[0] * (0.05 / 100)) : 0;
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (0.025 / 100)) : 0;
             TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.No_Walls, false);
+            return 1;
 
         }
 
-        public void GoLongNoResistance(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
+        public int GoLongNoResistance(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
             TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.No_Walls, usesmasl, smaslFast, smaslSlow);
-
+            return 1;
         }
 
 
 
 
-        public void GoLongRSI30mOversold()
+        public int GoLongRSI30mOversold()
         {
             if (CurrentBars[1] > rSI30m.Period - 1)
             {
@@ -962,9 +1007,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                     double spH = ScaleHalf ? Close[0] - (Close[0] * longRSIStopPercent / 2) : 0;
                     double lpH = ScaleHalf ? Close[0] + (Close[0] * longRSILimitPercent / 2) : 0;
                     TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.RSI, false);
+                    return 1;
                 }
                 // not shorting overbought RSI because the stocks are generally BULLISH and we'd die.
             }
+            return 0;
         }
         
 
@@ -1060,7 +1107,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
-        public void TryZoneOrders()
+        public void TryZoneOrders(int zonesWithinBars = 0, int inflectionWithinBars = 1, int inflectionPer = 3)
         {
             double LST = LongStrengthThreshold + (LongStrengthThreshold * (-PriceAdjustedDailySMASlope));
             double STT = ShortStrengthThreshold + (ShortStrengthThreshold * (-PriceAdjustedDailySMASlope));
@@ -1071,69 +1118,101 @@ namespace NinjaTrader.NinjaScript.Strategies
             int zoneDaysAlive = ASRZ.GetZoneDaysAlive(ActiveZoneBox);
             bool SZBStrength = ASRZ.DoesZoneStrengthComply(ActiveZoneBox, ">", STT);
             bool LZBSStrength = ASRZ.DoesZoneStrengthComply(ActiveZoneBox, ">", LST);
-            if (ASRZ.GetNumberOfFullTradingDays() < 10) return;
+            if (NumFullTradingDays < 5) return;
 
 
-            if (ActiveZoneBox == null && EntryZoneBox != null)
+            if (ActiveZoneBox.Type == (int)ZoneBox.Types.None && EntryZoneBox != null && EntryZoneBox.Type != (int)ZoneBox.Types.None)
             {
                 if (Position.MarketPosition == MarketPosition.Short && GetCurrentAsk() > EntryZoneBox.TopPrice)
                 {
                     GoLongAfterExit = true;
                     ExitViaLimitOrder(GetCurrentAsk());
+                    return;
                 }
                 else if (Position.MarketPosition == MarketPosition.Long && GetCurrentAsk() < EntryZoneBox.BottomPrice)
                 {
                     GoShortAfterExit = true;
                     ExitViaLimitOrder(GetCurrentBid());
+                    return;
+                }
+                else if (Position.MarketPosition == MarketPosition.Long && GetCurrentAsk() > EntryZoneBox.TopPrice)
+                {
+                    ChangeStopLoss(longOrder.AverageFillPrice, longOrder.AverageFillPrice, longOrder.AverageFillPrice, "Breakeven stoploss long zone");
+                    return;
+                }
+                else if (Position.MarketPosition == MarketPosition.Short && GetCurrentBid() < EntryZoneBox.BottomPrice)
+                {
+                    ChangeStopLoss(shortOrder.AverageFillPrice, shortOrder.AverageFillPrice, shortOrder.AverageFillPrice, "Breakeven stoploss short zone");
+                    return;
                 }
             }
 
-
-            if (ActiveZoneBox == null) return;
-
-            if (ActiveZoneBox.Type == (int)ZoneBox.Types.Demand)
+            if (Position.MarketPosition == MarketPosition.Short && GetCurrentBid() < shortOrder.AverageFillPrice - shortOrder.AverageFillPrice * 0.002)
             {
-                if (Position.MarketPosition == MarketPosition.Flat)
+                ChangeStopLoss((shortOrder.AverageFillPrice + GetCurrentBid()) / 2, shortOrder.AverageFillPrice, shortOrder.AverageFillPrice, "Profit protection stoploss short zone");
+                return;
+            }
+            else if (Position.MarketPosition == MarketPosition.Long && GetCurrentAsk() > longOrder.AverageFillPrice - longOrder.AverageFillPrice * 0.003)
+            {
+                ChangeStopLoss((longOrder.AverageFillPrice + GetCurrentAsk()) / 2, longOrder.AverageFillPrice, longOrder.AverageFillPrice, "Profit protection stoploss long zone");
+                return;
+            }
+
+
+            ZoneBox tempBox;
+            for (int i = 0; i <= zonesWithinBars; i++)
+            {
+                tempBox = ActiveZones[i];
+                if (tempBox == null) continue;
+                if (tempBox.Type == (int)ZoneBox.Types.Demand)
                 {
-                    if (IsInflection((int)InflectionTypes.Up, 3))
+                    if (Position.MarketPosition == MarketPosition.Flat)
                     {
-                        GoLongZone();
-                    }
-                }
-                else if (Position.MarketPosition == MarketPosition.Short)
-                {
-                    if (EntryZoneBox != null)
-                    {
-                        if (ActiveZoneBox.ID != EntryZoneBox.ID)
+                        if (IsInflection((int)InflectionTypes.Up, inflectionPer, inflectionWithinBars))
                         {
-                            //GoLongAfterExit = true;
-                            ExitViaLimitOrder(GetCurrentAsk());
+                            GoLongZone();
+                            break;
+                        }
+                    }
+                    else if (Position.MarketPosition == MarketPosition.Short)
+                    {
+                        if (EntryZoneBox != null)
+                        {
+                            if (tempBox.ID != EntryZoneBox.ID)
+                            {
+                                //GoLongAfterExit = true;
+                                ExitViaLimitOrder(GetCurrentAsk());
+                                break;
+                            }
                         }
                     }
                 }
-            }
-            else if (ActiveZoneBox.Type == (int)ZoneBox.Types.Supply)
-            {
-                if (Position.MarketPosition == MarketPosition.Flat)
+                else if (tempBox.Type == (int)ZoneBox.Types.Supply)
                 {
-                    if (IsInflection((int)InflectionTypes.Down, 3))
+                    if (Position.MarketPosition == MarketPosition.Flat)
                     {
-                        GoShortZone();
-                    }
-                }
-                else if (Position.MarketPosition == MarketPosition.Long)
-                {
-                    if (EntryZoneBox != null)
-                    {
-                        if (ActiveZoneBox.ID != EntryZoneBox.ID)
+                        if (IsInflection((int)InflectionTypes.Down, inflectionPer, inflectionWithinBars))
                         {
-                            //GoShortAfterExit = true;
-                            ExitViaLimitOrder(GetCurrentBid());
+                            GoShortZone();
+                            break;
                         }
                     }
-                }
+                    else if (Position.MarketPosition == MarketPosition.Long)
+                    {
+                        if (EntryZoneBox != null)
+                        {
+                            if (tempBox.ID != EntryZoneBox.ID)
+                            {
+                                //GoShortAfterExit = true;
+                                ExitViaLimitOrder(GetCurrentBid());
+                                break;
+                            }
+                        }
+                    }
 
+                }
             }
+
         }
 
         struct VWAPBounceTypes
@@ -1158,135 +1237,284 @@ namespace NinjaTrader.NinjaScript.Strategies
         };
 
 
-        public void TryVWAPOrders(int waitXMinsFromClose)
+        public int TryVWAPOrders(int waitXMinsFromClose, double threshold, int inflectionPer, int barsBack = 1, int smaPeriod = 3)
         {
-            double thres = 0.0009;
-            double priceToCompare = Low[1];
+            double thres = threshold;
+            SMA smaCompare = SMA(Low, smaPeriod);
+            //double priceToCompare = SMA(smaPeriod)[0];
             int prevVWAPBounceType = vwapBounceOrderType;
             int vwapBounceType = VWAPBounceTypes.None;
             int VWAPBouncePrice = VWAPBouncePrices.None;
+            int bounceBarsAgo = 0;
+            double bouncePrice = 0;
             double vwapPrice = 0;
 
-            if ( IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1], thres) != 0)
+            for (int i = 0; i < barsBack; i++)
             {
-                vwapBounceType = VWAPBounceTypes.Lower1;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Lower2;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Lower3;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper1;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper2;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper3;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Avg;
-                VWAPBouncePrice = VWAPBouncePrices.Low;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1];
-            }
-            priceToCompare = High[1];
+                if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower1;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower2;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower3;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper1;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper2;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper3;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Avg;
+                    VWAPBouncePrice = VWAPBouncePrices.Low;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                
+                smaCompare = SMA(High, smaPeriod);
 
-            if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Lower1;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Lower2;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Lower3;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper1;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper2;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Upper3;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1];
-            }
-            else if (IsNumWithinBands(priceToCompare, OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1], thres) != 0)
-            {
-                vwapBounceType = VWAPBounceTypes.Avg;
-                VWAPBouncePrice = VWAPBouncePrices.High;
-                vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1];
+                if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower1;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower2;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Lower3;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper1;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper2;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Upper3;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                else if (IsNumWithinBands(smaCompare[i], OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[i], thres) != 0)
+                {
+                    vwapBounceType = VWAPBounceTypes.Avg;
+                    VWAPBouncePrice = VWAPBouncePrices.High;
+                    vwapPrice = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[1];
+                    bounceBarsAgo = i;
+                    bouncePrice = smaCompare[i];
+                }
+                
             }
 
 
 
-
+            // implement stop based on slope of \
+            bool zbNull = true;
+            if (ActiveZoneBox != null) zbNull = false;
+            int ret = 0;
+            bool allowRiskyEntries = false;
+            bool useLinRegSlope = false;
             if (vwapBounceType != VWAPBounceTypes.None)
             {
-                
-                if (waitXMinsFromClose > 0 && (Time[0] - sessBegin).TotalMinutes < waitXMinsFromClose) return;
+
+                double pricee = 0;
+                if (vwapBounceType == VWAPBounceTypes.Avg) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[0];
+                else if (vwapBounceType == VWAPBounceTypes.Upper1) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[0];
+                else if (vwapBounceType == VWAPBounceTypes.Upper2) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[0];
+                else if (vwapBounceType == VWAPBounceTypes.Upper3) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[0];
+                else if (vwapBounceType == VWAPBounceTypes.Lower1) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[0];
+                else if (vwapBounceType == VWAPBounceTypes.Lower2) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[0];
+                else if (vwapBounceType == VWAPBounceTypes.Lower3) pricee = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[0];
+                if (waitXMinsFromClose > 0 && (Time[0] - sessBegin).TotalMinutes < waitXMinsFromClose) return 0;
 
                 if (Position.MarketPosition == MarketPosition.Flat)
                 {
-                    if (LinRegSlope(6)[0] < 0)
+                    double stop = 0;
+                    double stoph = 0;
+                    double limit = 0;
+                    double limith = 0;
+
+                    /*
+                    if (!zbNull && ActiveZoneBox.Type == (int)ZoneBox.Types.Demand)
                     {
                         if (Close[0] >= vwapPrice)
                         {
-                            GoLongVWAP(GetStopPrice(OrderCategories.Long, 0.5), GetStopPrice(OrderCategories.Long, 0.2), GetProfitPrice(OrderCategories.Long, 1.2), GetProfitPrice(OrderCategories.Long, 0.98), vwapBounceType);
+                            ret = GoLongVWAP(GetStopPrice(OrderCategories.Long, 0.5), GetStopPrice(OrderCategories.Long, 0.3), GetProfitPrice(OrderCategories.Long, 0.52), GetProfitPrice(OrderCategories.Long, 0.4), vwapBounceType, true, 2);
                         }
+                    }
+                    */
+                    if (IsInflection((int)InflectionTypes.Up, inflectionPer))
+                    //if (CandleReverse((int)InflectionTypes.Up))
+                    {
+
+                            if (Close[0] >= vwapPrice && IsNumWithinBands(Close[0], pricee, thres) != 0)
+                            {
+                                stop = 0.7;
+                                stoph = 0.8;
+                                limit = 0.5;
+                                limith = 0.25;
+                                ret = GoLongVWAP(GetStopPrice(OrderCategories.Long, stop), GetStopPrice(OrderCategories.Long, stoph), GetProfitPrice(OrderCategories.Long, limit), GetProfitPrice(OrderCategories.Long, limith), vwapBounceType, true, 2);
+                                //Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Green);
+                            }
+                            else if (allowRiskyEntries)
+                            {
+                                stop = 0.4;
+                                stoph = 0.3;
+                                limit = 0.4;
+                                limith = 0.3;
+                                ret = GoLongVWAP(GetStopPrice(OrderCategories.Long, stop), GetStopPrice(OrderCategories.Long, stoph), GetProfitPrice(OrderCategories.Long, limit), GetProfitPrice(OrderCategories.Long, limith), vwapBounceType, true, 2);
+
+                            }
+
+                        
+                        /*
                         else
                         {
-                            GoLongVWAP(GetStopPrice(OrderCategories.Long, 0.4), GetStopPrice(OrderCategories.Long, 0.2), GetProfitPrice(OrderCategories.Long, 0.8), GetProfitPrice(OrderCategories.Long, 0.7), vwapBounceType);
+                            stop = 0.25;
+                            stoph = 0.2;
+                            limit = 0.22;
+                            limith = 0.15;
+                        }
+                        if (Close[0] >= vwapPrice)
+                        {
+                            ret = GoLongVWAP(GetStopPrice(OrderCategories.Long, stop), GetStopPrice(OrderCategories.Long, stoph), GetProfitPrice(OrderCategories.Long, limit), GetProfitPrice(OrderCategories.Long, limith), vwapBounceType, true, 2);
+                            Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Green);
+                        }
+                        */
+
+                    }
+                    /*
+                    if (!zbNull && ActiveZoneBox.Type == (int)ZoneBox.Types.Supply)
+                    {
+                        if (Close[0] <= vwapPrice)
+                        {
+                            ret = GoShortVWAP(GetStopPrice(OrderCategories.Short, 0.37), GetStopPrice(OrderCategories.Short, 0.165), GetProfitPrice(OrderCategories.Short, 0.4), GetProfitPrice(OrderCategories.Short, 0.3), vwapBounceType, true, 2);
                         }
 
                     }
-                    else if (LinRegSlope(6)[0] > 0)
+                    */
+                    else if (IsInflection((int)InflectionTypes.Down, inflectionPer))
+                    //else if (CandleReverse((int)InflectionTypes.Down))
                     {
-                        if (Close[0] <= vwapPrice) {
-                            GoShortVWAP(GetStopPrice(OrderCategories.Short, 0.37), GetStopPrice(OrderCategories.Short, 0.165), GetProfitPrice(OrderCategories.Short, 0.8), GetProfitPrice(OrderCategories.Short, 0.77), vwapBounceType);
-                        }
+
+                            if (Close[0] <= vwapPrice && IsNumWithinBands(Close[0], pricee, thres) != 0)
+                            {
+                                stop = 0.6;
+                                stoph = 0.7;
+                                limit = 0.45;
+                                limith = 0.25;
+                                ret = GoShortVWAP(GetStopPrice(OrderCategories.Short, stop), GetStopPrice(OrderCategories.Short, stoph), GetProfitPrice(OrderCategories.Short, limit), GetProfitPrice(OrderCategories.Short, limith), vwapBounceType, true, 2);
+                                //Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Red);
+                            }
+                            else if (allowRiskyEntries)
+                            {
+                                stop = 0.3;
+                                stoph = 0.2;
+                                limit = 0.28;
+                                limith = 0.20;
+                                ret = GoShortVWAP(GetStopPrice(OrderCategories.Short, stop), GetStopPrice(OrderCategories.Short, stoph), GetProfitPrice(OrderCategories.Short, limit), GetProfitPrice(OrderCategories.Short, limith), vwapBounceType, true, 2);
+
+                                //Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Red);
+                            }
+
+                        
+                        /*
                         else
                         {
-                            GoShortVWAP(GetStopPrice(OrderCategories.Short, 0.3), GetStopPrice(OrderCategories.Short, 0.24), GetProfitPrice(OrderCategories.Short, 0.65), GetProfitPrice(OrderCategories.Short, 0.48), vwapBounceType);
+                            stop = 0.25;
+                            stoph = 0.2;
+                            limit = 0.2;
+                            limith = 0.10;
                         }
+                        if (Close[0] <= vwapPrice)
+                        {
+                            ret = GoShortVWAP(GetStopPrice(OrderCategories.Short, stop), GetStopPrice(OrderCategories.Short, stoph), GetProfitPrice(OrderCategories.Short, limit), GetProfitPrice(OrderCategories.Short, limith), vwapBounceType, true, 2);
+                            Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Red);
+                        }
+                        */
                     }
                 }
+
+
+                if (IsInflection((int)InflectionTypes.Up, inflectionPer))
+                //if (CandleReverse((int)InflectionTypes.Up))
+                {
+
+                    Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Green);
+                }
+                else if (IsInflection((int)InflectionTypes.Down, inflectionPer))
+                //else if (CandleReverse((int)InflectionTypes.Down))
+                {
+
+                    Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - bounceBarsAgo).ToString(), true, Bars.GetTime(CurrentBar - bounceBarsAgo), bouncePrice, Brushes.Red);
+                }
+
+
+
+
                 else if (Position.MarketPosition == MarketPosition.Short && currentOrderClassification == (int)OrderClassifications.VWAP)
                 {
                     if (prevVWAPBounceType != vwapBounceType)
@@ -1302,7 +1530,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     }
                 }
                 
-                
+                /*
                 double pricee = 0;
                 if (VWAPBouncePrice == VWAPBouncePrices.Low) pricee = Low[1];
                 else if (VWAPBouncePrice == VWAPBouncePrices.High) pricee = High[1];
@@ -1318,8 +1546,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     Draw.Diamond(this, vwapBounceType.ToString() + " " + (CurrentBar - 1).ToString(), true, Bars.GetTime(CurrentBar - 1), pricee, Brushes.White);
                 }
+                */
                 
             }
+            return ret;
         }
 
 
@@ -1498,7 +1728,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         if (debugDraw) Draw.Rectangle(this, "askdmkasm" + CurrentBar, 0, High[0], 1, Low[1], Brushes.DarkBlue);
                         if (currentOrderClassification == (int)OrderClassifications.Zone)
                         {
-                            if (IsInflection((int)InflectionTypes.Down, 3, 6) && GetCurrentBid() > longOrder.AverageFillPrice && IsGapDown())
+                            if (IsInflection((int)InflectionTypes.Down, 3) && GetCurrentBid() > longOrder.AverageFillPrice && IsGapDown())
                             {
                                 Draw.Rectangle(this, "askdmkasm" + CurrentBar, 0, High[0], 1, Low[1], Brushes.White);
                                 ChangeStopLoss(longOrder.AverageFillPrice, (longOrder.AverageFillPrice + Close[0]) / 2, (longOrder.AverageFillPrice + Close[0]) / 2);
@@ -1552,7 +1782,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         if (debugDraw) Draw.Rectangle(this, "askdmkasm" + CurrentBar, 0, High[0], 1, Low[1], Brushes.Yellow);
                         if (currentOrderClassification == (int)OrderClassifications.Zone)
                         {
-                            if (IsInflection((int)InflectionTypes.Up, 3, 6) && GetCurrentAsk() < shortOrder.AverageFillPrice)
+                            if (IsInflection((int)InflectionTypes.Up, 3) && GetCurrentAsk() < shortOrder.AverageFillPrice)
                             {
                                 Draw.Rectangle(this, "askdmkasm" + CurrentBar, 0, High[0], 1, Low[1], Brushes.Black);
                                 //ChangeStopLoss(shortOrder.AverageFillPrice, (shortOrder.AverageFillPrice + Close[0]) / 2, (shortOrder.AverageFillPrice + Close[0]) / 2);
@@ -1639,6 +1869,26 @@ namespace NinjaTrader.NinjaScript.Strategies
             #endregion
             */
             return true;
+        }
+
+        
+        private double[] calculateSlopeOfSlope(HMACustom thisCalculatedHMA)
+        {
+
+            double[] outputArray = new double[2];
+
+            double firstDerivCondition = 0;
+            double secondDerivCondition = 0;
+
+
+
+            return outputArray;
+        }
+
+        public void HandleSlopeOfSlope(int hmalen)
+        {
+            HMACustom calculatedHMA = HMACustom(Medians[0], hmalen);
+            SlopeOfSlope[0] = calculateSlopeOfSlope(calculatedHMA);
         }
 
         public void UpdateDayEvents()
@@ -1744,18 +1994,21 @@ namespace NinjaTrader.NinjaScript.Strategies
             Down = 1
         }
 
-        public bool IsInflection(int direction, int period, int smooth = 1, bool detrend = false, InputSeriesType ist = InputSeriesType.SMA, NormType nt = NormType.None) // "Up" or "Down"
+        public bool IsInflection(int direction, int period, int withinBars = 1, int smooth = 1, bool detrend = false, InputSeriesType ist = InputSeriesType.SMA, NormType nt = NormType.None) // "Up" or "Down"
         {
-            SlopeEnhancedOp refLRS = SlopeEnhancedOp(period, 56, smooth, detrend, ist, nt, Brushes.Green, Brushes.Red);
-            if (CurrentBar > period + 1)
+            SlopeEnhancedOp refLRS = SlopeEnhancedOp(period, 56, smooth, detrend, ist, nt, Brushes.Green, Brushes.Red, PlotStyle.Bar);
+            for (int i = 1; i <= withinBars; i++)
             {
-                if (direction == (int)InflectionTypes.Up && refLRS[1] < 0 && refLRS[0] > 0)
+                if (CurrentBar > period + 1)
                 {
-                    return true;
-                }
-                else if (direction == (int)InflectionTypes.Down && refLRS[1] > 0 && refLRS[0] < 0)
-                {
-                    return true;
+                    if (direction == (int)InflectionTypes.Up && refLRS[i] < 0 && refLRS[i-1] > 0)
+                    {
+                        return true;
+                    }
+                    else if (direction == (int)InflectionTypes.Down && refLRS[i] > 0 && refLRS[i-1] < 0)
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -1840,6 +2093,81 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
             }
         }
+
+        public void UseVwapConditionalStop(int conditionTarget)
+        {
+            vwapStopPrice = 0;
+            vwapConditionCount = 0;
+            vwapConditionTarget = conditionTarget;
+            useVwapConditionalStop = true;
+        }
+
+
+        public void CheckVwapConditionalStop()
+        {
+
+            if (!useVwapConditionalStop || currentOrderClassification != (int)OrderClassifications.VWAP) return;
+            double price = 0;
+            if (vwapBounceOrderType == VWAPBounceTypes.Avg) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).VWAP[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Upper1) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Upper[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Upper2) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Upper[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Upper3) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Upper[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Lower1) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev1Lower[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Lower2) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev2Lower[0];
+            else if (vwapBounceOrderType == VWAPBounceTypes.Lower3) price = OrderFlowVWAP(VWAPResolution.Standard, Bars.TradingHours, VWAPStandardDeviations.Three, 1, 2, 3).StdDev3Lower[0];
+            if (currentOrderCategory == OrderCategories.Long && Close[0] < price)
+            {
+                vwapConditionCount++;
+            }
+            else if (currentOrderCategory == OrderCategories.Short && Close[0] > price)
+            {
+                vwapConditionCount++;
+            }
+            if (vwapConditionCount >= vwapConditionTarget)
+            {
+                ExitViaLimitOrder(Close[0]);
+                useVwapConditionalStop = false;
+            }
+        }
+
+
+        public void CheckVwapProfitProtection()
+        {
+
+            if (currentOrderClassification != (int)OrderClassifications.VWAP) return;
+            if (currentOrderCategory == OrderCategories.Long && Position.MarketPosition == MarketPosition.Long)
+            {
+                if (longOrder == null) return;
+                if (IsInflection((int)InflectionTypes.Down, 6) && Close[0] > longOrder.AverageFillPrice)
+                {
+                    ChangeStopLoss((longOrder.AverageFillPrice + Close[0]) / 2, longOrder.AverageFillPrice, longOrder.AverageFillPrice, "Vwap Long Stop Order adjusted");
+                }
+            }
+            else if (currentOrderCategory == OrderCategories.Short && Position.MarketPosition == MarketPosition.Short)
+            {
+                if (shortOrder == null) return;
+                if (IsInflection((int)InflectionTypes.Up, 6) && Close[0] > shortOrder.AverageFillPrice)
+                {
+                    ChangeStopLoss((shortOrder.AverageFillPrice + Close[0]) / 2, shortOrder.AverageFillPrice, shortOrder.AverageFillPrice, "Vwap Short Stop Order adjusted");
+                }
+            }
+        }
+
+
+        public bool CandleReverse(int direction)
+        {
+            if (direction == (int)InflectionTypes.Down && Close[1] > Open[1] && Close[0] < Open[0])
+            {
+                return true;
+            }
+            if (direction == (int)InflectionTypes.Up && Close[1] < Open[1] && Close[0] > Open[0])
+            {
+                return true;
+            }
+            return false;
+
+        }
+
 
         /// <summary>
         /// Return profit target based on last close and percent
@@ -1945,7 +2273,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
                 else if (Math.Abs(High[0] - Low[0] - (High[0] - Math.Abs(Open[0] + Close[0]) / 2)) / (High[0] - Low[0]) > ASRZ.CandleStats.GetHighMinusLowMinusOpenDivCloseAvg() + ASRZ.CandleStats.GetHighMinusLowMinusOpenDivCloseStDev()/2)
                 {
-                    if (drawDiamonds) Draw.Diamond(this, "hammer down " + CurrentBar, true, Bars.GetTime(CurrentBar), Low[0], Brushes.Green);
+                    if (drawDiamonds) Draw.Diamond(this, "hammer up " + CurrentBar, true, Bars.GetTime(CurrentBar), Low[0], Brushes.Green);
                     return true;
                 }
             }
@@ -2232,9 +2560,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             rSI1m.Update();
 
 
-            if (CurrentBars[0] < BarsRequiredToTrade)
-                return;
-
+            if (CurrentBars[0] < BarsRequiredToTrade) return;
 
             if (BarsInProgress == 3)
             {
@@ -2262,7 +2588,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 rSI30m.Update();
                 //GoLongRSI30mOversold();
 
-                return;
+                //return;
             }
 
 
@@ -2275,6 +2601,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 IsHammer();
                 // Update the current zonebox, if it exists
                 ActiveZoneBox = ASRZ.GetCurrentZone();
+                ActiveZones[0] = ActiveZoneBox;
                 // Cancel and flatten orders at the end of day
                 if ((sessEnd - Time[0]).TotalSeconds <= sessionEndSeconds)
                 {
@@ -2288,6 +2615,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         if (debugPrint) Print("%──────────────────────────────────────────────────────────────%");
                         if (debugPrint) Print("SESSION END: " + sessEnd + " BEGIN: " + sessBegin);
                         if (debugPrint) Print("███████████████████████████████████████████████████████████████");
+                        NumFullTradingDays++;
                     }
 
                 }
@@ -2298,13 +2626,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                     // Try SMA inflection entries
                     //TryInflectionOrders();
 
-                    if (ASRZ.ZoneBoxList.Count > 0 + TradeDelay)
+                    if (ASRZ.ZoneBoxList.Count > 0)
                     {
                         //TryInflectionOrders();
                         if (UseZoneStrengthOrderMultiplier)
                         {
                             orderMultiplier = 1;
-                            if (ActiveZoneBox != null)
+                            if (ActiveZoneBox != null && ActiveZoneBox.Type != (int)ZoneBox.Types.None)
                             {
                                 orderMultiplier = Math.Floor(ZoneStrengthOrderScale * Math.Log(ASRZ.GetZoneStrength(ActiveZoneBox) + 1)) / 100;
                             }
@@ -2376,6 +2704,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                         }
                         */
 
+                        // implement stops if bar closes below the entry vwap then exit
+                        // eg if 2 bars close below vwap, exit (when long)
+
+                        /*
                         if (currentOrderClassification == (int)OrderClassifications.VWAP && vwapBounceOrderType == VWAPBounceTypes.Avg)
                         {
                             if (Position.MarketPosition == MarketPosition.Long)
@@ -2393,8 +2725,23 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 }
                             }
                         }
-                        TryVWAPOrders(40);
-                        //TryZoneOrders();
+                        */
+                        //CheckVwapProfitProtection();
+                        /*
+                        CheckVwapConditionalStop();
+                        int ordered = 0;
+                        if (ordered == 0)
+                        {
+                            ordered = TryVWAPOrders(30, 0.001, 3, 1, 3);
+                        }
+                        if (ordered == 0)
+                        {
+                            TryZoneOrders();
+                        }
+                        */
+                        int hmalen = 20;
+                        HandleSlopeOfSlope(hmalen);
+                        TryZoneOrders(2,1,6);
                     }
                 }
 

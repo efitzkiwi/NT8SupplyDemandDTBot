@@ -44,6 +44,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 			
 			private Brush colorUp = Brushes.Green;  //color for slope > 0
 			private Brush colorDown = Brushes.Red;  //color for slope <= 0
+
+			private PlotStyle lineStyle = PlotStyle.Bar;
 		
         #endregion
 		
@@ -70,7 +72,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 			else if (State == State.Configure)
 			{
-				AddPlot(new Stroke(Brushes.Navy), PlotStyle.Bar, "Slope");
+				AddPlot(new Stroke(Brushes.Navy), lineStyle, "Slope");
 				AddPlot(Brushes.DarkSeaGreen, "Zeroline");
 				
 //				Add(new Plot(new Pen(Color.Navy, 3), PlotStyle.Bar, "Slope"));
@@ -146,6 +148,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 					diff = LinRegSlope(calcseries,Period)[0];
 					break;
 				} 
+				case InputSeriesType.HMACustomConcavity:
+				{
+					diff = LinRegSlope(LinRegSlope(HMACustom(calcseries, Period), 2), 2)[0];
+					break;
+				} 
 				default:
 				{
 					if(indicator != null)
@@ -204,6 +211,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 				case InputSeriesType.HMA:
 				{
 					indicatorBase = HMA(inputSeries,period);
+					break;
+				}
+				case InputSeriesType.HMACustom:
+				{
+					indicatorBase = HMACustom(inputSeries, period);
 					break;
 				}
 				case InputSeriesType.WMA:
@@ -356,7 +368,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 			set { ColorDown = Serialize.StringToBrush(value); }
 		}
 
-        #endregion
+		[NinjaScriptProperty]
+		[RefreshProperties(RefreshProperties.All)]
+		[Display(Name = "Plot Style", Description = "How to draw the line", Order = 9, GroupName = "Parameters")]
+		public PlotStyle LineStyle
+		{
+			get { return lineStyle; }
+			set { lineStyle = value; }
+		}
+
+		#endregion
 	}
 	
 	
@@ -368,6 +389,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 	DEMA,
 	EMA,
 	HMA,
+	HMACustom,
+	HMACustomConcavity,
 	LinRegSlope,
 	SMA,
 	TEMA,
@@ -392,18 +415,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private SlopeEnhancedOp[] cacheSlopeEnhancedOp;
-		public SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
-			return SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown);
+			return SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown, lineStyle);
 		}
 
-		public SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input, int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input, int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
 			if (cacheSlopeEnhancedOp != null)
 				for (int idx = 0; idx < cacheSlopeEnhancedOp.Length; idx++)
-					if (cacheSlopeEnhancedOp[idx] != null && cacheSlopeEnhancedOp[idx].Period == period && cacheSlopeEnhancedOp[idx].DetrendPeriod == detrendPeriod && cacheSlopeEnhancedOp[idx].Smooth == smooth && cacheSlopeEnhancedOp[idx].Detrend == detrend && cacheSlopeEnhancedOp[idx].InputType == inputType && cacheSlopeEnhancedOp[idx].NormType == normType && cacheSlopeEnhancedOp[idx].ColorUp == colorUp && cacheSlopeEnhancedOp[idx].ColorDown == colorDown && cacheSlopeEnhancedOp[idx].EqualsInput(input))
+					if (cacheSlopeEnhancedOp[idx] != null && cacheSlopeEnhancedOp[idx].Period == period && cacheSlopeEnhancedOp[idx].DetrendPeriod == detrendPeriod && cacheSlopeEnhancedOp[idx].Smooth == smooth && cacheSlopeEnhancedOp[idx].Detrend == detrend && cacheSlopeEnhancedOp[idx].InputType == inputType && cacheSlopeEnhancedOp[idx].NormType == normType && cacheSlopeEnhancedOp[idx].ColorUp == colorUp && cacheSlopeEnhancedOp[idx].ColorDown == colorDown && cacheSlopeEnhancedOp[idx].LineStyle == lineStyle && cacheSlopeEnhancedOp[idx].EqualsInput(input))
 						return cacheSlopeEnhancedOp[idx];
-			return CacheIndicator<SlopeEnhancedOp>(new SlopeEnhancedOp(){ Period = period, DetrendPeriod = detrendPeriod, Smooth = smooth, Detrend = detrend, InputType = inputType, NormType = normType, ColorUp = colorUp, ColorDown = colorDown }, input, ref cacheSlopeEnhancedOp);
+			return CacheIndicator<SlopeEnhancedOp>(new SlopeEnhancedOp(){ Period = period, DetrendPeriod = detrendPeriod, Smooth = smooth, Detrend = detrend, InputType = inputType, NormType = normType, ColorUp = colorUp, ColorDown = colorDown, LineStyle = lineStyle }, input, ref cacheSlopeEnhancedOp);
 		}
 	}
 }
@@ -412,14 +435,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
-			return indicator.SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown);
+			return indicator.SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown, lineStyle);
 		}
 
-		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input , int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input , int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
-			return indicator.SlopeEnhancedOp(input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown);
+			return indicator.SlopeEnhancedOp(input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown, lineStyle);
 		}
 	}
 }
@@ -428,14 +451,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
-			return indicator.SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown);
+			return indicator.SlopeEnhancedOp(Input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown, lineStyle);
 		}
 
-		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input , int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown)
+		public Indicators.SlopeEnhancedOp SlopeEnhancedOp(ISeries<double> input , int period, int detrendPeriod, int smooth, bool detrend, InputSeriesType inputType, NormType normType, Brush colorUp, Brush colorDown, PlotStyle lineStyle)
 		{
-			return indicator.SlopeEnhancedOp(input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown);
+			return indicator.SlopeEnhancedOp(input, period, detrendPeriod, smooth, detrend, inputType, normType, colorUp, colorDown, lineStyle);
 		}
 	}
 }
