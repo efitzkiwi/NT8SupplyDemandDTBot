@@ -936,20 +936,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 				//See Help Guide for additional information.
 				IsSuspendedWhileInactive = true;
 
-				AreaStrengthMultiplier = 5000;
-				ExitBeforeClose = true; // Minutes
-				ProxyStrengthMultiplier = 1000;
-				NewZoneStrength = 70;
 				DaysToLoadZones = 50;
-				NewZoneTopMultiplier = 0.0005;
-				NewZoneBottomMultiplier = 0.0005;
 				ResZoneColor = Brushes.Red;
 				SupZoneColor = Brushes.Green;
-				BreakStrengthMultiplier = -2500;
-				UseVolAccumulation = true;
-				Expiration = 50; // Days (NOT trading days... just DAYS);
-				MaxMergeCount = 2;
-				MergeThreshold = 0.001;
+
 
 			}
 			else if (State == State.Configure)
@@ -2124,32 +2114,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		#region Properties
 
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "Area strength threshold multiplier", Description = "Multiplies the minimum threshold required for zones to gain strength", Order = 1, GroupName = "Parameters")]
-		public int AreaStrengthMultiplier
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Display(Name = "ExitBeforeClose", Description = "ExitBeforeClose", Order = 2, GroupName = "Parameters")]
-		public bool ExitBeforeClose
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "Proxy strength multiplier", Description = "Proximity of pivots in Ticks to determine where S/R level will be", Order = 3, GroupName = "Parameters")]
-		public int ProxyStrengthMultiplier
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "New zone strength", Description = "Default pre-computed strength of a new zone. Equation is 5 * Sqrt ( input ) ", Order = 4, GroupName = "Parameters")]
-		public int NewZoneStrength
-		{ get; set; }
 
 		[NinjaScriptProperty]
 		[Range(0, int.MaxValue)]
@@ -2157,19 +2121,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 		public int DaysToLoadZones
 		{ get; set; }
 
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "New zone top multiplier", Description = "Multiplier amount to extend the top of a new zone upon creation", Order = 6, GroupName = "Parameters")]
-		public double NewZoneTopMultiplier
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "New zone bottom multiplier", Description = "Multiplier amount to extend the bottom of a new zone upon creation", Order = 7, GroupName = "Parameters")]
-		public double NewZoneBottomMultiplier
-		{ get; set; }
 
 		[NinjaScriptProperty]
 		[XmlIgnore]
@@ -2197,40 +2148,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 			set { SupZoneColor = Serialize.StringToBrush(value); }
 		}
 
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "Break strength multiplier", Description = "Multiplier for threshold strength applied if a zone is broken", Order = 10, GroupName = "Parameters")]
-		public double BreakStrengthMultiplier
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Display(Name = "Use volume accumulation", Description = "(Suggest TRUE) Factors in relative volume into zone strength calculation", Order = 11, GroupName = "Parameters")]
-		public bool UseVolAccumulation
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(int.MinValue, int.MaxValue)]
-		[Display(Name = "Bar expiration", Description = "Number of days a bar can stay alive", Order = 12, GroupName = "Parameters")]
-		public int Expiration
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(0, int.MaxValue)]
-		[Display(Name = "Max merge count", Description = "Maximum number of times a zone can be merged", Order = 13, GroupName = "Parameters")]
-		public int MaxMergeCount
-		{ get; set; }
-
-		[Browsable(false)]
-		[NinjaScriptProperty]
-		[Range(0, int.MaxValue)]
-		[Display(Name = "Merge threshold", Description = "Merge threshold required for two zones to combine", Order = 14, GroupName = "Parameters")]
-		public double MergeThreshold
-		{ get; set; }
-
 		#endregion
 
 
@@ -2244,18 +2161,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private AdvancedSRZones[] cacheAdvancedSRZones;
-		public AdvancedSRZones AdvancedSRZones(int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public AdvancedSRZones AdvancedSRZones(int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
-			return AdvancedSRZones(Input, areaStrengthMultiplier, exitBeforeClose, proxyStrengthMultiplier, newZoneStrength, daysToLoadZones, newZoneTopMultiplier, newZoneBottomMultiplier, resZoneColor, supZoneColor, breakStrengthMultiplier, useVolAccumulation, expiration, maxMergeCount, mergeThreshold);
+			return AdvancedSRZones(Input, daysToLoadZones, resZoneColor, supZoneColor);
 		}
 
-		public AdvancedSRZones AdvancedSRZones(ISeries<double> input, int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public AdvancedSRZones AdvancedSRZones(ISeries<double> input, int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
 			if (cacheAdvancedSRZones != null)
 				for (int idx = 0; idx < cacheAdvancedSRZones.Length; idx++)
-					if (cacheAdvancedSRZones[idx] != null && cacheAdvancedSRZones[idx].AreaStrengthMultiplier == areaStrengthMultiplier && cacheAdvancedSRZones[idx].ExitBeforeClose == exitBeforeClose && cacheAdvancedSRZones[idx].ProxyStrengthMultiplier == proxyStrengthMultiplier && cacheAdvancedSRZones[idx].NewZoneStrength == newZoneStrength && cacheAdvancedSRZones[idx].DaysToLoadZones == daysToLoadZones && cacheAdvancedSRZones[idx].NewZoneTopMultiplier == newZoneTopMultiplier && cacheAdvancedSRZones[idx].NewZoneBottomMultiplier == newZoneBottomMultiplier && cacheAdvancedSRZones[idx].ResZoneColor == resZoneColor && cacheAdvancedSRZones[idx].SupZoneColor == supZoneColor && cacheAdvancedSRZones[idx].BreakStrengthMultiplier == breakStrengthMultiplier && cacheAdvancedSRZones[idx].UseVolAccumulation == useVolAccumulation && cacheAdvancedSRZones[idx].Expiration == expiration && cacheAdvancedSRZones[idx].MaxMergeCount == maxMergeCount && cacheAdvancedSRZones[idx].MergeThreshold == mergeThreshold && cacheAdvancedSRZones[idx].EqualsInput(input))
+					if (cacheAdvancedSRZones[idx] != null && cacheAdvancedSRZones[idx].DaysToLoadZones == daysToLoadZones && cacheAdvancedSRZones[idx].ResZoneColor == resZoneColor && cacheAdvancedSRZones[idx].SupZoneColor == supZoneColor && cacheAdvancedSRZones[idx].EqualsInput(input))
 						return cacheAdvancedSRZones[idx];
-			return CacheIndicator<AdvancedSRZones>(new AdvancedSRZones(){ AreaStrengthMultiplier = areaStrengthMultiplier, ExitBeforeClose = exitBeforeClose, ProxyStrengthMultiplier = proxyStrengthMultiplier, NewZoneStrength = newZoneStrength, DaysToLoadZones = daysToLoadZones, NewZoneTopMultiplier = newZoneTopMultiplier, NewZoneBottomMultiplier = newZoneBottomMultiplier, ResZoneColor = resZoneColor, SupZoneColor = supZoneColor, BreakStrengthMultiplier = breakStrengthMultiplier, UseVolAccumulation = useVolAccumulation, Expiration = expiration, MaxMergeCount = maxMergeCount, MergeThreshold = mergeThreshold }, input, ref cacheAdvancedSRZones);
+			return CacheIndicator<AdvancedSRZones>(new AdvancedSRZones(){ DaysToLoadZones = daysToLoadZones, ResZoneColor = resZoneColor, SupZoneColor = supZoneColor }, input, ref cacheAdvancedSRZones);
 		}
 	}
 }
@@ -2264,14 +2181,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.AdvancedSRZones AdvancedSRZones(int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public Indicators.AdvancedSRZones AdvancedSRZones(int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
-			return indicator.AdvancedSRZones(Input, areaStrengthMultiplier, exitBeforeClose, proxyStrengthMultiplier, newZoneStrength, daysToLoadZones, newZoneTopMultiplier, newZoneBottomMultiplier, resZoneColor, supZoneColor, breakStrengthMultiplier, useVolAccumulation, expiration, maxMergeCount, mergeThreshold);
+			return indicator.AdvancedSRZones(Input, daysToLoadZones, resZoneColor, supZoneColor);
 		}
 
-		public Indicators.AdvancedSRZones AdvancedSRZones(ISeries<double> input , int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public Indicators.AdvancedSRZones AdvancedSRZones(ISeries<double> input , int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
-			return indicator.AdvancedSRZones(input, areaStrengthMultiplier, exitBeforeClose, proxyStrengthMultiplier, newZoneStrength, daysToLoadZones, newZoneTopMultiplier, newZoneBottomMultiplier, resZoneColor, supZoneColor, breakStrengthMultiplier, useVolAccumulation, expiration, maxMergeCount, mergeThreshold);
+			return indicator.AdvancedSRZones(input, daysToLoadZones, resZoneColor, supZoneColor);
 		}
 	}
 }
@@ -2280,14 +2197,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.AdvancedSRZones AdvancedSRZones(int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public Indicators.AdvancedSRZones AdvancedSRZones(int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
-			return indicator.AdvancedSRZones(Input, areaStrengthMultiplier, exitBeforeClose, proxyStrengthMultiplier, newZoneStrength, daysToLoadZones, newZoneTopMultiplier, newZoneBottomMultiplier, resZoneColor, supZoneColor, breakStrengthMultiplier, useVolAccumulation, expiration, maxMergeCount, mergeThreshold);
+			return indicator.AdvancedSRZones(Input, daysToLoadZones, resZoneColor, supZoneColor);
 		}
 
-		public Indicators.AdvancedSRZones AdvancedSRZones(ISeries<double> input , int areaStrengthMultiplier, bool exitBeforeClose, int proxyStrengthMultiplier, int newZoneStrength, int daysToLoadZones, double newZoneTopMultiplier, double newZoneBottomMultiplier, Brush resZoneColor, Brush supZoneColor, double breakStrengthMultiplier, bool useVolAccumulation, int expiration, int maxMergeCount, double mergeThreshold)
+		public Indicators.AdvancedSRZones AdvancedSRZones(ISeries<double> input , int daysToLoadZones, Brush resZoneColor, Brush supZoneColor)
 		{
-			return indicator.AdvancedSRZones(input, areaStrengthMultiplier, exitBeforeClose, proxyStrengthMultiplier, newZoneStrength, daysToLoadZones, newZoneTopMultiplier, newZoneBottomMultiplier, resZoneColor, supZoneColor, breakStrengthMultiplier, useVolAccumulation, expiration, maxMergeCount, mergeThreshold);
+			return indicator.AdvancedSRZones(input, daysToLoadZones, resZoneColor, supZoneColor);
 		}
 	}
 }

@@ -184,41 +184,45 @@ namespace NinjaTrader.NinjaScript.Strategies
                 // Indicator vars
                 HMAPeriodLength = 200;
                 ExitBeforeClose = false; // Minutes
-                ProxyStrengthMultiplier = 500;
-                NewZoneStrength = 60;
-                DaysToLoadZones = 50;
-                NewZoneTopMultiplier = 0.0045;
-                NewZoneBottomMultiplier = 0.008;
                 ResZoneColor = Brushes.Red;
                 SupZoneColor = Brushes.Green;
                 AmountToBuy = 30000; // $$$
-                LongStrengthThreshold = 55;
-                ShortStrengthThreshold = 50;
                 UseZoneStrengthOrderMultiplier = true;
-                ZoneStrengthOrderScale = 100;
-                BreakStrengthMultiplier = -2200;
-                UseVolAccumulation = true;
                 ShortStopLossPercent = 0.2;
                 LongStopLossPercent = 0.3;
                 ShortProfitPercent = 0.7;
                 LongProfitPercent = 0.8;
-                TradeDelay = 0; //minutes
-                DelayExitMinutes = 0;
-                Expiration = 60;
-                MaxMergeCount = 1;
-                MergeThreshold = 0.007;
                 ScaleHalf = true;
                 PercentOfAccForPosition = 50;
 
-                overBoughtRsiHighPriorityStopPercent = 0.0036;
-                overBoughtRsiLowPriorityStopPercent = 0.0034;
-                overBoughtRsiGenericStopPercent = 0.004;
-                //longZONEProfitMaximizationThreshold = 0.012;
-                genericShortOrderProtectionPercentThreshold = 0.0075;
-                overBoughtRsiPercentAdjustmentThreshold = 72;
-                overSoldRsiPercentAdjustmentThreshold = 30;
+                UseHMAConcavityOrders = true;
+                ExitBeforeCloseHMAConcavity = false;
+                UseSupplyDemandZoneOrders = false;
+                DaysToLoadZones = 50;
+                ExitBeforeCloseZones = true;
+                Use30mOversolRSIOrders = false;
+                Use30mOversolRSIOrdersThreshold = 30;
+                ExitBeforeClose30mOversoldRSI = true;
+                UseSMACrossOrders1 = false;
+                UseSMACrossOrders1Timeframe = 1;
+                UseSMACrossOrders1PeriodSlow = 50;
+                SMACrossOrders1PeriodFast = 20;
+                ExitBeforeCloseSMACrossOrders1 = true;
+                UseSMACrossOrders2 = false;
+                UseSMACrossOrders2Timeframe = 5;
+                SMACrossOrders2PeriodSlow = 200;
+                SMACrossOrders2PeriodFast = 50;
+                ExitBeforeCloseSMACrossOrders2 = true;
+                UseInflectionOrders = false;
+                UseInflectionOrdersTimeframe = 1;
+                UseInflectionOrdersPeriod = 20;
+                ExitBeforeCloseInflectionOrders = true;
+                UseVWAPOrders = false;
+                ExitBeforeCloseVWAPOrders = true;
 
-            }
+
+
+    }
 
             else if (State == State.Configure)
             {
@@ -229,7 +233,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             else if (State == State.DataLoaded)
             {
-                ASRZ = AdvancedSRZones(HMAPeriodLength, ExitBeforeClose, ProxyStrengthMultiplier, NewZoneStrength, DaysToLoadZones, NewZoneTopMultiplier, NewZoneBottomMultiplier, ResZoneColor, SupZoneColor, BreakStrengthMultiplier, UseVolAccumulation, Expiration, MaxMergeCount, MergeThreshold);
+                ASRZ = AdvancedSRZones(DaysToLoadZones, ResZoneColor, SupZoneColor);
                 AddChartIndicator(ASRZ);
                 RVOL = RelativeVolumeNT8(60, 2, 30);
                 HMAConcavity = SlopeEnhancedOp(Median, HMAPeriodLength, 0, 1, false, InputSeriesType.HMACustomConcavity, NormType.AveragePrice, Brushes.Green, Brushes.Red, PlotStyle.Line);
@@ -306,8 +310,9 @@ namespace NinjaTrader.NinjaScript.Strategies
         public enum OrderClassifications : int
         {
             Zone = 0,
-            RSI = 1,
-            SMA_Cross = 2,
+            RSI30m = 1,
+            SMA_Cross1 = 2,
+            SMA_Cross2 = 7,
             Inflection = 3,
             No_Walls = 4,
             VWAP = 5,
@@ -942,7 +947,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             double lp = Close[0] - (Close[0] * (0.24 / 100) * orderMultiplier);
             double spH = ScaleHalf ? Close[0] + (Close[0] * (0.06 / 100) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] - (Close[0] * (0.085 / 100) * orderMultiplier) : 0;
-            TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross, false);
+            TrySubmitShortOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross1, false);
             return 1;
 
         }
@@ -950,7 +955,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         public int GoShortSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
-            TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross, usesmasl, smaslFast, smaslSlow);
+            TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross1, usesmasl, smaslFast, smaslSlow);
             return 1;
         }
 
@@ -961,14 +966,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             double lp = Close[0] + (Close[0] * (0.1 / 100) * orderMultiplier);
             double spH = ScaleHalf ? Close[0] - (Close[0] * (0.045 / 100) * orderMultiplier) : 0;
             double lpH = ScaleHalf ? Close[0] + (Close[0] * (0.09 / 100) * orderMultiplier) : 0;
-            TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross, true);
+            TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.SMA_Cross1, true);
             return 1;
         }
 
         public int GoLongSMACross(double stop, double stopH, double limit, double limitH, bool usesmasl = false, int smaslFast = 20, int smaslSlow = 50)
         {
             shareQuantity = GetShareQuantity();
-            TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross, usesmasl, smaslFast, smaslSlow);
+            TrySubmitLongOrder(limit, limitH, limit, stop, stopH, stop, (int)OrderClassifications.SMA_Cross1, usesmasl, smaslFast, smaslSlow);
             return 1;
         }
 
@@ -1035,20 +1040,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 
 
-        public int GoLongRSI30mOversold()
+        public int TryRSI30mOversoldOrder()
         {
             if (CurrentBars[1] > rSI30m.Period - 1)
             {
                 // TODO : oversold RSI profit and stop should be more bullish
 
-                if (rSI30m[0] < 26 && Position.MarketPosition == MarketPosition.Flat)
+                if (rSI30m[0] < Use30mOversolRSIOrdersThreshold && Position.MarketPosition == MarketPosition.Flat)
                 {
                     shareQuantity = GetShareQuantity();
                     double sp = Close[0] - (Close[0] * longRSIStopPercent);
                     double lp = Close[0] + (Close[0] * longRSILimitPercent);
                     double spH = ScaleHalf ? Close[0] - (Close[0] * longRSIStopPercent / 2) : 0;
                     double lpH = ScaleHalf ? Close[0] + (Close[0] * longRSILimitPercent / 2) : 0;
-                    TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.RSI, false);
+                    TrySubmitLongOrder(lp, lpH, lp, sp, spH, sp, (int)OrderClassifications.RSI30m, false);
                     return 1;
                 }
                 // not shorting overbought RSI because the stocks are generally BULLISH and we'd die.
@@ -1057,83 +1062,23 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
         
 
-        public void Try10mRSIProfitProtection()
-        {
-            // If the 10m RSI is oversold 
-            if (CurrentBars[3] > rSI10m.Period - 1)
-            {
 
-                if (longOrder != null && currentOrderDirection == (int)OrderCategories.Long && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
-                {
-                    if (rSI10m[0] > overBoughtRsiPercentAdjustmentThreshold && Close[0] > Open[0])
-                    {
-                        if (ScaleHalf)
-                        {
-                            if (stopOrderHalf != null)
-                            {
-                                stopPriceHalf = (Open[0] - Open[0] * overBoughtRsiHighPriorityStopPercent); // overbought RSI protection high
-                                if (debugPrint) Print("ORDER_CHANGE Long 10mRSIProfitProtection for stop half order " + stopOrderHalf + " to exit at price " + stopPriceHalf + " time " + Time[0]);
-                                ChangeOrder(stopOrderHalf, stopOrderHalf.Quantity, 0, stopPriceHalf);
-                            }
-                            stopPrice = Open[0] - Open[0] * overBoughtRsiLowPriorityStopPercent; // overbought RSI protection low
-                            if (debugPrint) Print("ORDER_CHANGE Long 10mRSIProfitProtection for stop order " + stopOrder + " to exit at price " + stopPrice + " time " + Time[0]);
-                            ChangeOrder(stopOrder, stopOrder.Quantity, 0, stopPrice);
-                        }
-                        else
-                        {
-                            stopPrice = Open[0] - Open[0] * overBoughtRsiGenericStopPercent; // overbought RSI protection generic
-                            if (debugPrint) Print("ORDER_CHANGE Long 10mRSIProfitProtection for stop order " + stopOrder + " to exit at price " + stopPrice + " time " + Time[0]);
-                            ChangeOrder(stopOrder, stopOrder.Quantity, 0, stopPrice);
-                        }
-                        hasPriorityOrderBeenAdjusted = true;
-                    }
-                }
-
-
-                if (shortOrder != null && currentOrderDirection == (int)OrderCategories.Short && limitOrder != null && stopOrder != null && hasPriorityOrderBeenAdjusted == false)
-                {
-                    if (rSI10m[0] < overSoldRsiPercentAdjustmentThreshold && Close[0] < Open[0])
-                    {
-                        if (ScaleHalf)
-                        {
-                            if (stopOrderHalf != null)
-                            {
-                                stopPriceHalf = (Open[0] + Open[0] * overBoughtRsiHighPriorityStopPercent);
-                                if (debugPrint) Print("ORDER_CHANGE Short 10mRSIProfitProtection for stop half order " + stopOrderHalf + " to exit at price " + stopPriceHalf + " time " + Time[0]);
-                                ChangeOrder(stopOrderHalf, stopOrderHalf.Quantity, 0, stopPriceHalf);
-                            }
-                            stopPrice = Open[0] + Open[0] * overBoughtRsiLowPriorityStopPercent;
-                            if (debugPrint) Print("ORDER_CHANGE Short 10mRSIProfitProtection for stop order " + stopOrder + " to exit at price " + stopPrice + " time " + Time[0]);
-                            ChangeOrder(stopOrder, stopOrder.Quantity, 0, stopPrice);
-                        }
-                        else
-                        {
-                            stopPrice = Open[0] + Open[0] * overBoughtRsiGenericStopPercent;
-                            if (debugPrint) Print("ORDER_CHANGE Short 10mRSIProfitProtection for stop order " + stopOrder + " to exit at price " + stopPrice + " time " + Time[0]);
-                            ChangeOrder(stopOrder, stopOrder.Quantity, 0, stopPrice);
-                        }
-                        hasPriorityOrderBeenAdjusted = true;
-                    }
-                }
-            }
-        }
-
-        public void TryInflectionOrders(int timeframe)
+        public void TryInflectionOrders(int period, int timeframe)
         {
             if (Position.MarketPosition == MarketPosition.Flat)
             {
-                if (IsInflection(timeframe, (int)InflectionTypes.Down, 5))
+                if (IsInflection(timeframe, (int)InflectionTypes.Down, period))
                 {
                     GoShortInflectionPoint();
                 }
-                else if (IsInflection(timeframe, (int)InflectionTypes.Up, 5))
+                else if (IsInflection(timeframe, (int)InflectionTypes.Up, period))
                 {
                     GoLongInflectionPoint();
                 }
             }
             else if (Position.MarketPosition == MarketPosition.Long)
             {
-                if (IsInflection(timeframe, (int)InflectionTypes.Down, 5))
+                if (IsInflection(timeframe, (int)InflectionTypes.Down, period))
                 {
                     //GoShortAfterExit = true;
                     ExitViaLimitOrder(GetCurrentBid());
@@ -1141,7 +1086,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (Position.MarketPosition == MarketPosition.Short)
             {
-                if (IsInflection(timeframe, (int)InflectionTypes.Up, 5))
+                if (IsInflection(timeframe, (int)InflectionTypes.Up, period))
                 {
                     //GoLongAfterExit = true;
                     ExitViaLimitOrder(GetCurrentAsk());
@@ -1151,15 +1096,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         public void TryZoneOrders(int zonesWithinBars = 0, int inflectionWithinBars = 1, int inflectionPer = 3)
         {
-            double LST = LongStrengthThreshold + (LongStrengthThreshold * (-PriceAdjustedDailySMASlope));
-            double STT = ShortStrengthThreshold + (ShortStrengthThreshold * (-PriceAdjustedDailySMASlope));
-            LST = 0;
-            STT = 0;
             //double strength = ASRZ.GetZoneStrength(ASRZ.GetCurrentZone());
             int direction = ASRZ.GetZoneType(ActiveZoneBox);
             int zoneDaysAlive = ASRZ.GetZoneDaysAlive(ActiveZoneBox);
-            bool SZBStrength = ASRZ.DoesZoneStrengthComply(ActiveZoneBox, ">", STT);
-            bool LZBSStrength = ASRZ.DoesZoneStrengthComply(ActiveZoneBox, ">", LST);
             if (NumFullTradingDays < 5) return;
 
 
@@ -1691,7 +1630,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     }
                     break;
 
-                case (int)OrderClassifications.SMA_Cross:
+                case (int)OrderClassifications.SMA_Cross1:
                     if (currentOrderDirection == (int)OrderCategories.Long)
                     {
                         tempstr = longSMACROSSProfitMaximizationThreshold;
@@ -1705,7 +1644,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     break;
 
 
-                case (int)OrderClassifications.RSI:
+                case (int)OrderClassifications.RSI30m:
                     if (currentOrderDirection == (int)OrderCategories.Long)
                     {
                         tempstr = longRSIProfitMaximizationThreshold;
@@ -1812,11 +1751,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 ChangeStopLoss(longOrder.AverageFillPrice, (longOrder.AverageFillPrice + Close[0]) / 2, (longOrder.AverageFillPrice + Close[0]) / 2);
                             }
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.RSI)
+                        else if (currentOrderSpecification == (int)OrderClassifications.RSI30m)
                         {
 
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross)
+                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross1)
                         {
 
                         }
@@ -1838,11 +1777,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 TryUseSMAAsStopLoss(20, 50);
                             }
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.RSI)
+                        else if (currentOrderSpecification == (int)OrderClassifications.RSI30m)
                         {
 
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross)
+                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross1)
                         {
 
                         }
@@ -1866,11 +1805,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                                 //ChangeStopLoss(shortOrder.AverageFillPrice, (shortOrder.AverageFillPrice + Close[0]) / 2, (shortOrder.AverageFillPrice + Close[0]) / 2);
                             }
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.RSI)
+                        else if (currentOrderSpecification == (int)OrderClassifications.RSI30m)
                         {
 
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross)
+                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross1)
                         {
 
                         }
@@ -1886,11 +1825,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                         {
 
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.RSI)
+                        else if (currentOrderSpecification == (int)OrderClassifications.RSI30m)
                         {
 
                         }
-                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross)
+                        else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross1)
                         {
 
                         }
@@ -1907,7 +1846,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             #region specific protection
             // LOOKING FOR BEARISH SIGNALS TO PROTECT A CURRENT LONG THAT HASN'T PRODUCED GOOD PROFIT ALREADY
-            if (longOrder != null && currentOrderSpecification == (int)OrderClassifications.RSI && currentOrderDirection == (int)OrderCategories.Long && limitOrder != null && stopOrder != null && hasLongRSIOrderBeenAdjusted == false)
+            if (longOrder != null && currentOrderSpecification == (int)OrderClassifications.RSI30m && currentOrderDirection == (int)OrderCategories.Long && limitOrder != null && stopOrder != null && hasLongRSIOrderBeenAdjusted == false)
             {
                 if (GetCurrentBid() > ((longOrder.AverageFillPrice + (longOrder.AverageFillPrice * longRSILimitPercent)) + longOrder.AverageFillPrice) / 2)
                 {
@@ -2637,7 +2576,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     if (debugPrint) Print((sessEnd - Time[0]).TotalSeconds + " seconds until session end.");
                     if (ExitBeforeClose) CancelAndFlattenAll();
-                    //cfa = true;
+                    else if (currentOrderSpecification == (int)OrderClassifications.HMAConcavity && ExitBeforeCloseHMAConcavity) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.Inflection && ExitBeforeCloseInflectionOrders) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.RSI30m && ExitBeforeClose30mOversoldRSI) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross1 && ExitBeforeCloseSMACrossOrders1) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.SMA_Cross2 && ExitBeforeCloseSMACrossOrders2) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.VWAP && ExitBeforeCloseVWAPOrders) CancelAndFlattenAll();
+                    else if (currentOrderSpecification == (int)OrderClassifications.Zone && ExitBeforeCloseZones) CancelAndFlattenAll();
                 }
                 if (Bars.IsLastBarOfSession)
                 {
@@ -2664,9 +2609,10 @@ namespace NinjaTrader.NinjaScript.Strategies
             // 10 minutes
             if (BarsInProgress == 3)
             {
+
+                if (UseInflectionOrders && UseInflectionOrdersTimeframe == 10) TryInflectionOrders(UseInflectionOrdersPeriod, 3);
                 rSI10m.Update();
                 // If the 10m RSI is oversold 
-                Try10mRSIProfitProtection();
             }
 
 
@@ -2683,11 +2629,12 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (BarsInProgress == 1)
             {
 
+                if (UseInflectionOrders && UseInflectionOrdersTimeframe == 30) TryInflectionOrders(UseInflectionOrdersPeriod, 1);
 
                 rSI30m.Update();
                 //GoLongRSI30mOversold();
-
-                TryHMAConcavityOrders(HMAPeriodLength, 1);
+                if (UseHMAConcavityOrders) TryHMAConcavityOrders(HMAPeriodLength, 1);
+                if (Use30mOversolRSIOrders) TryRSI30mOversoldOrder();
 
                 //return;
             }
@@ -2708,14 +2655,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                         orderMultiplier = 1;
                         if (ActiveZoneBox != null && ActiveZoneBox.Type != (int)ZoneBox.Types.None)
                         {
-                            orderMultiplier = Math.Floor(ZoneStrengthOrderScale * Math.Log(ASRZ.GetZoneStrength(ActiveZoneBox) + 1)) / 100;
+                            orderMultiplier = Math.Floor(1 * Math.Log(ASRZ.GetZoneStrength(ActiveZoneBox) + 1)) / 100;
                         }
                     }
                     // If the order was designated to use an SMA as a stoploss, this function updates the order
 
 
-                    if (currentOrderDirection == (int)OrderCategories.Long && currentOrderSpecification == (int)OrderClassifications.SMA_Cross) TryUseSMAAsStopLoss(6, 6);
-                    else if (currentOrderDirection == (int)OrderCategories.Short && currentOrderSpecification == (int)OrderClassifications.SMA_Cross) TryUseSMAAsStopLoss(6, 6);
+                    if (currentOrderDirection == (int)OrderCategories.Long && currentOrderSpecification == (int)OrderClassifications.SMA_Cross1) TryUseSMAAsStopLoss(6, 6);
+                    else if (currentOrderDirection == (int)OrderCategories.Short && currentOrderSpecification == (int)OrderClassifications.SMA_Cross1) TryUseSMAAsStopLoss(6, 6);
                     else if (currentOrderDirection == (int)OrderCategories.Long && currentOrderSpecification == (int)OrderClassifications.No_Walls) TryUseSMAAsStopLoss(smaSLFAST, smaSLSLOW);
                     //else TryUseSMAAsStopLoss(20, 50);
 
@@ -2727,37 +2674,18 @@ namespace NinjaTrader.NinjaScript.Strategies
                     //TryOCOProfitProtection();
                     //UpdateOrderProfitThreshold();
 
+                    if (UseInflectionOrders && UseInflectionOrdersTimeframe == 1) TryInflectionOrders(UseInflectionOrdersPeriod, 0);
 
-                    if (CurrentBar > sma20m.Period - 1 && CurrentBar > sma50m.Period - 1 && CurrentBar > sma5m.Period - 1 && CurrentBar > sma6m.Period)
-                    {
-                        if (sma20m[1] > sma50m[1] && sma20m[0] < sma50m[0])
-                        {
+                    if (UseVWAPOrders) TryVWAPOrders(30, 0.001, 3, 1, 3);
 
-                            if (rSI1m[0] > 30)
-                            {
+                    // todo
+                    // if (UseSMACrossOrders1 && UseSMACrossOrders1Timeframe == 1) trysma1
+                    // if (UseSMACrossOrders2 && UseSMACrossOrders2Timeframe == 1) trysma2
 
-                                //TryShortSMACross();
-                                //GoShortSMACross();
-                                //return;
 
-                            }
-                            else if (IsRSIWithinXBars("10m", 3, ">", 69))
-                            {
-                                //TryShortSMACross();
-                                //GoShortSMACross();
-                                //return;
-                            }
+                    if (UseSupplyDemandZoneOrders) TryZoneOrders(2, 1, 6);
 
-                        }
-                        else if (sma5m[1] < sma20m[1] && sma5m[0] > sma20m[0] && rSI1m[0] < 85)
-                        {
-                            //TryLongSMACross();
-                            //GoLongSMACross();
-                            //return;
-                        }
-                    }
-
-                    TryInflectionOrders(0);
+                    //TryInflectionOrders(0);
 
                     /*
                     if (ASRZ.GetNumberOfFullTradingDays() > 20 && ASRZ.WasZeroResX(0) && Position.MarketPosition == MarketPosition.Flat) //  if there is no resistance
@@ -2818,7 +2746,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                     //TryHMAConcavityOrders(HMAPeriodLength);
                     //TryZoneOrders(2,1,6);
-                    
+
                 }
 
             }
@@ -2827,16 +2755,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         #region properties
 
-        [NinjaScriptProperty]
-        [Range(1, 2000)]
-        [Display(Name = "HMA Period Length", Description = "HMA Period Length", Order = 1, GroupName = "Parameters")]
-        public int HMAPeriodLength
-        { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Exit Before Close", Description = "Exit Before close", Order = 2, GroupName = "Parameters")]
+        [Display(Name = "Exit Before Close", Description = "Exit Before close for all orders. If unchecked, specific order types will be accounted for.", Order = 1, GroupName = "Parameters")]
         public bool ExitBeforeClose
         { get; set; }
+
+        /*
 
         [Browsable(false)]
         [NinjaScriptProperty]
@@ -2852,12 +2777,42 @@ namespace NinjaTrader.NinjaScript.Strategies
         public int NewZoneStrength
         { get; set; }
 
+        */
+        [NinjaScriptProperty]
+        [Display(Name = "UseHMAConcavityOrders", Description = "Toggle HMA Concavity orders on/off", Order = 2, GroupName = "Parameters")]
+        public bool UseHMAConcavityOrders
+        { get; set; }
+
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "HMA Period Length", Description = "HMA Period Length", Order = 3, GroupName = "Parameters")]
+        public int HMAPeriodLength
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseHMAConcavity", Description = "ExitBeforeCloseHMAConcavity", Order = 4, GroupName = "Parameters")]
+        public bool ExitBeforeCloseHMAConcavity
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseSupplyDemandZoneOrders", Description = "Toggle SupplyDemandZoneOrders on/off", Order = 5, GroupName = "Parameters")]
+        public bool UseSupplyDemandZoneOrders
+        { get; set; }
+
+
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
-        [Display(Name = "Days to load zones", Description = "How many days to load to calculate zones", Order = 5, GroupName = "Parameters")]
+        [Display(Name = "Days to load zones", Description = "How many days to load to calculate zones", Order = 6, GroupName = "Parameters")]
         public int DaysToLoadZones
         { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseZones", Description = "ExitBeforeCloseZones", Order = 7, GroupName = "Parameters")]
+        public bool ExitBeforeCloseZones
+        { get; set; }
+
+        /*
         [Browsable(false)]
         [NinjaScriptProperty]
         [Range(int.MinValue, int.MaxValue)]
@@ -2872,9 +2827,137 @@ namespace NinjaTrader.NinjaScript.Strategies
         public double NewZoneBottomMultiplier
         { get; set; }
 
+        */
+
+        /*
+        public enum OrderClassifications : int
+        {
+            Zone = 0,
+            RSI = 1,
+            SMA_Cross = 2,
+            Inflection = 3,
+            No_Walls = 4,
+            VWAP = 5,
+            HMAConcavity = 6
+        }
+
+        */
+
+        [NinjaScriptProperty]
+        [Display(Name = "Use30mOversolRSIOrders", Description = "Toggle 30mOversolRSIOrders on/off", Order = 8, GroupName = "Parameters")]
+        public bool Use30mOversolRSIOrders
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(0, 100)]
+        [Display(Name = "30mOversolRSIOrdersThreshold", Description = "Threshold to trigger oversold RSI order e.g. input '30' means 30m RSI buy triggers", Order = 9, GroupName = "Parameters")]
+        public int Use30mOversolRSIOrdersThreshold
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeClose30mRSI", Description = "ExitBeforeClose30mOversoldRSI", Order = 10, GroupName = "Parameters")]
+        public bool ExitBeforeClose30mOversoldRSI
+        { get; set; }
+
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseSMACrossOrders1", Description = "Toggle first SMACrossOrders on/off", Order = 11, GroupName = "Parameters")]
+        public bool UseSMACrossOrders1
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseSMACrossOrders1Timeframe", Description = "Timeframe to use for UseSMACrossOrders1 e.g. '30' means 30 minute time frame", Order = 12, GroupName = "Parameters")]
+        public int UseSMACrossOrders1Timeframe
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "SMACrossOrders1PeriodSlow", Description = "Period to use for UseSMACrossOrders1 e.g. '50' means 50 period moving avg", Order = 13, GroupName = "Parameters")]
+        public int UseSMACrossOrders1PeriodSlow
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "SMACrossOrders1PeriodFast", Description = "Period to use for UseSMACrossOrders1 e.g. '50' means 50 period moving avg", Order = 14, GroupName = "Parameters")]
+        public int SMACrossOrders1PeriodFast
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseSMACrossOrders1", Description = "ExitBeforeCloseSMACrossOrders1", Order = 15, GroupName = "Parameters")]
+        public bool ExitBeforeCloseSMACrossOrders1
+        { get; set; }
+
+
+
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseSMACrossOrders2", Description = "Toggle second SMACrossOrders on/off", Order = 16, GroupName = "Parameters")]
+        public bool UseSMACrossOrders2
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseSMACrossOrders2Timeframe", Description = "Timeframe to use for UseSMACrossOrders2 e.g. '30' means 30 minute time frame", Order = 17, GroupName = "Parameters")]
+        public int UseSMACrossOrders2Timeframe
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "SMACrossOrders2PeriodSlow", Description = "Period to use for UseSMACrossOrders2 e.g. '50' means 50 period moving avg", Order = 18, GroupName = "Parameters")]
+        public int SMACrossOrders2PeriodSlow
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "SMACrossOrders2PeriodFast", Description = "Period to use for UseSMACrossOrders2 e.g. '50' means 50 period moving avg", Order = 19, GroupName = "Parameters")]
+        public int SMACrossOrders2PeriodFast
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseSMACrossOrders2", Description = "ExitBeforeCloseSMACrossOrders2", Order = 20, GroupName = "Parameters")]
+        public bool ExitBeforeCloseSMACrossOrders2
+        { get; set; }
+
+
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseInflectionOrders", Description = "Toggle InflectionOrders on/off", Order = 21, GroupName = "Parameters")]
+        public bool UseInflectionOrders
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseInflectionOrdersTimeframe", Description = "Timeframe to use for UseInflectionOrders e.g. '30' means 30 minute time frame", Order = 22, GroupName = "Parameters")]
+        public int UseInflectionOrdersTimeframe
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, 200)]
+        [Display(Name = "UseInflectionOrdersPeriod", Description = "Period to use for UseInflectionOrders e.g. '50' means 50 period moving avg", Order = 23, GroupName = "Parameters")]
+        public int UseInflectionOrdersPeriod
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseInflectionOrders", Description = "ExitBeforeCloseInflectionOrders", Order = 24, GroupName = "Parameters")]
+        public bool ExitBeforeCloseInflectionOrders
+        { get; set; }
+
+
+        [NinjaScriptProperty]
+        [Display(Name = "UseVWAPOrders", Description = "Toggle UseVWAPOrders on/off", Order = 25, GroupName = "Parameters")]
+        public bool UseVWAPOrders
+        { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "ExitBeforeCloseVWAPOrders", Description = "ExitBeforeCloseVWAPOrders", Order = 26, GroupName = "Parameters")]
+        public bool ExitBeforeCloseVWAPOrders
+        { get; set; }
+
+
+
+
+
         [NinjaScriptProperty]
         [XmlIgnore]
-        [Display(Name = "Resistance Zone Color", Order = 8, GroupName = "Parameters")]
+        [Display(Name = "Resistance Zone Color", Order = 27, GroupName = "Parameters")]
         public Brush ResZoneColor
         { get; set; }
         [Browsable(false)]
@@ -2886,7 +2969,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         [NinjaScriptProperty]
         [XmlIgnore]
-        [Display(Name = "Support Zone Color", Order = 9, GroupName = "Parameters")]
+        [Display(Name = "Support Zone Color", Order = 28, GroupName = "Parameters")]
         public Brush SupZoneColor
         { get; set; }
 
@@ -2900,168 +2983,57 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
-        [Display(Name = "$$$ amount to buy", Description = "Amount in $$$ to buy for ONE full order", Order = 10, GroupName = "Parameters")]
+        [Display(Name = "$$$ amount to buy", Description = "Amount in $$$ to buy for ONE full order", Order = 29, GroupName = "Parameters")]
         public double AmountToBuy
         { get; set; }
 
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "Long zone strength", Description = "The cumulative strength of the current bar a zone is in that triggers a long order", Order = 11, GroupName = "Parameters")]
-        public double LongStrengthThreshold
-        { get; set; }
-
 
         [Browsable(false)]
         [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "Short zone strength", Description = "The cumulative strength of the current bar a zone is in that triggers a short order", Order = 12, GroupName = "Parameters")]
-        public double ShortStrengthThreshold
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Display(Name = "Zone strength order multiplier", Description = "Adjusts stop loss and profit taking based on percieved zone strength upon entry condition. ", Order = 13, GroupName = "Parameters")]
+        [Display(Name = "Zone strength order multiplier", Description = "Adjusts stop loss and profit taking based on percieved zone strength upon entry condition. ", Order = 30, GroupName = "Parameters")]
         public bool UseZoneStrengthOrderMultiplier
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(50, 200)]
-        [Display(Name = "Zone strength order scale", Description = "Adjusts the zone scale equation. Higher = wider stop losses and limit sells", Order = 14, GroupName = "Parameters")]
-        public int ZoneStrengthOrderScale
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(int.MinValue, int.MaxValue)]
-        [Display(Name = "Break strength multiplier", Description = "Multiplier for threshold strength applied if a zone is broken", Order = 15, GroupName = "Parameters")]
-        public double BreakStrengthMultiplier
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Display(Name = "Use volume accumulation", Description = "(Suggest TRUE) Factors in relative volume into zone strength calculation", Order = 16, GroupName = "Parameters")]
-        public bool UseVolAccumulation
         { get; set; }
 
 
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
-        [Display(Name = "Short stop loss %", Description = "Short stop loss %", Order = 17, GroupName = "Parameters")]
+        [Display(Name = "Short stop loss %", Description = "Short stop loss %", Order = 31, GroupName = "Parameters")]
         public double ShortStopLossPercent
         { get; set; }
 
 
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
-        [Display(Name = "Long stop loss %", Description = "Long stop loss %", Order = 18, GroupName = "Parameters")]
+        [Display(Name = "Long stop loss %", Description = "Long stop loss %", Order = 32, GroupName = "Parameters")]
         public double LongStopLossPercent
         { get; set; }
 
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
-        [Display(Name = "Short profit target %", Description = "Short profit target %", Order = 19, GroupName = "Parameters")]
+        [Display(Name = "Short profit target %", Description = "Short profit target %", Order = 33, GroupName = "Parameters")]
         public double ShortProfitPercent
         { get; set; }
 
 
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
-        [Display(Name = "Long profit target %", Description = "Long profit target %", Order = 20, GroupName = "Parameters")]
+        [Display(Name = "Long profit target %", Description = "Long profit target %", Order = 34, GroupName = "Parameters")]
         public double LongProfitPercent
         { get; set; }
 
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Trade delay", Description = "Delay each trade condition by X minutes", Order = 21, GroupName = "Parameters")]
-        public int TradeDelay
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Delay exit (minutes)", Description = "Prevents rapid, unnecessary orders from firing in a tight area of zones", Order = 22, GroupName = "Parameters")]
-        public int DelayExitMinutes
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Zone expiration", Description = "Number of days it takes for a bar to expire. -1 means they never expire", Order = 23, GroupName = "Parameters")]
-        public int Expiration
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Max merge count", Description = "Maximum number of times a zone can be merged", Order = 24, GroupName = "Parameters")]
-        public int MaxMergeCount
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Merge threshold", Description = "Merge threshold required for two zones to combine", Order = 25, GroupName = "Parameters")]
-        public double MergeThreshold
-        { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Scale half", Description = "Scale out orders half at a time", Order = 26, GroupName = "Parameters")]
+        [Display(Name = "Scale half", Description = "Scale out orders half at a time", Order = 35, GroupName = "Parameters")]
         public bool ScaleHalf
         { get; set; }
 
 
         [NinjaScriptProperty]
         [Range(0, 100)]
-        [Display(Name = "% acc to use for pos", Description = "% acc to use for pos", Order = 27, GroupName = "Parameters")]
+        [Display(Name = "% acc to use for pos", Description = "% acc to use for pos", Order = 36, GroupName = "Parameters")]
         public double PercentOfAccForPosition
         { get; set; }
 
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "overBoughtRsiHighPriorityStopPercent", Description = "overBoughtRsiHighPriorityStopPercent", Order = 28, GroupName = "Parameters")]
-        public double overBoughtRsiHighPriorityStopPercent
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "overBoughtRsiLowPriorityStopPercent", Description = "overBoughtRsiLowPriorityStopPercent", Order = 29, GroupName = "Parameters")]
-        public double overBoughtRsiLowPriorityStopPercent
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "overBoughtRsiGenericStopPercent", Description = "overBoughtRsiGenericStopPercent", Order = 30, GroupName = "Parameters")]
-        public double overBoughtRsiGenericStopPercent
-        { get; set; }
-
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "genericShortOrderProtectionPercentThreshold", Description = "genericShortOrderProtectionPercentThreshold", Order = 32, GroupName = "Parameters")]
-        public double genericShortOrderProtectionPercentThreshold
-        { get; set; }
-
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "overBoughtRsiPercentAdjustmentThreshold", Description = "overBoughtRsiPercentAdjustmentThreshold", Order = 33, GroupName = "Parameters")]
-        public double overBoughtRsiPercentAdjustmentThreshold
-        { get; set; }
-
-        [Browsable(false)]
-        [NinjaScriptProperty]
-        [Range(0, 100)]
-        [Display(Name = "overSoldRsiPercentAdjustmentThreshold", Description = "overSoldRsiPercentAdjustmentThreshold", Order = 34, GroupName = "Parameters")]
-        public double overSoldRsiPercentAdjustmentThreshold
-        { get; set; }
 
 
 
