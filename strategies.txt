@@ -1,0 +1,47 @@
+/*
+ * Profitable trade ideas
+ * #1 - Timeframe: 1 minute
+ *      Price low is below 200SMA then next price closes above 200ma
+ *      Go Long
+ *      Exits:
+ *          If two closes below 200SMA then exit
+ *      Remarks:
+ *          Experiment only entering if 200SMA slope is positive
+ *          
+ *      
+ * #2 - Timeframe: 1 minute
+ *      Distance between 50SMA and 200SMA is "small" and 50SMA has inflection UP
+ *      Go Long
+ *      Exits:
+ *          If entry above 200SMA, place stop below 200SMA
+ *          If price hits profit target, place stop right below 50SMA
+ *      
+ * #3 - Timeframe: 1 minute
+ *      Distance between 20MA and 200SMA is "small" and 50SMA has inflection UP
+ *      Go Long
+ *      Remarks:
+ *          Experiment only entering if 200SMA slope is positive
+ *          
+ *          
+ * #4 - Timeframe: 1 minute
+ *      Price closes very close to VWAP AND 200SMA slope is positive AND last price close is above 200SMA
+ *      Go Long
+ *          Exits:
+ *              Stop below VWAP
+ *              Profit target %
+ *              
+ * #5 - Timeframe: 1 minute
+ *      Distance between all SMAs (14,20,50,100,200) is extremely "SMALL" (?define SMALL)
+ *      Go Long
+ *      
+ *      
+ * #6 - Timeframe: 1 minute
+ *      Trade day is over 30 minutes AND price has bounced off VWAP 3rd deviation band
+ *      If bounce up, Go Long
+ *      If bounce down, Go Short
+ *      Exits:
+ *          Profit target %
+ *      Remarks:
+ *          Experiment exiting when distance between 14, 20 and 50 SMAs is SMALL
+ *              
+ */
