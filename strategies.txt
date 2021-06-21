@@ -43,5 +43,22 @@
  *          Profit target %
  *      Remarks:
  *          Experiment exiting when distance between 14, 20 and 50 SMAs is SMALL
+ *
+ * #7 - Timeframe: 30 minute
+ *      30m closes below 200MA and previous 30m closed above 200ma, 30m closes above 200ma and previous 30m closed below 200ma
+ *      Go short, go long (respectfuly)
+ *      Exits:
+ *          Profit target %
+ *      Remarks:
+ *          These are multi-day trades
+ *
+ * #8 - Timeframe: 30 minute
+ *      30m low is below 200ma and 30m closes above 200ma and previous 30m closed above 200ma
+ *      Go Long
+ *      Exits:
+ *          Profit target % with trailing stop when first tgt reached
+ *      Remarks:
+ *          These are day trades usually
+ *          Experiment only entering when 200ma is positive
  *              
  */
