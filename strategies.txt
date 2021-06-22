@@ -1,7 +1,8 @@
 /*
- * Profitable trade ideas
+ * Possibly profitable trade ideas
+ *
  * #1 - Timeframe: 1 minute
- *      Price low is below 200SMA then next price closes above 200ma
+ *      Last price low is below 200SMA then next price closes above 200ma
  *      Go Long
  *      Exits:
  *          If two closes below 200SMA then exit
@@ -26,9 +27,9 @@
  * #4 - Timeframe: 1 minute
  *      Price closes very close to VWAP AND 200SMA slope is positive AND last price close is above 200SMA
  *      Go Long
- *          Exits:
- *              Stop below VWAP
- *              Profit target %
+ *      Exits:
+ *          Stop below VWAP
+ *          Profit target %
  *              
  * #5 - Timeframe: 1 minute
  *      Distance between all SMAs (14,20,50,100,200) is extremely "SMALL" (?define SMALL)
@@ -45,12 +46,12 @@
  *          Experiment exiting when distance between 14, 20 and 50 SMAs is SMALL
  *
  * #7 - Timeframe: 30 minute
- *      30m closes below 200MA and previous 30m closed above 200ma, 30m closes above 200ma and previous 30m closed below 200ma
- *      Go short, go long (respectfuly)
+ *      Go Long: Close 1 bar ago is below 200MA AND last close is above 200ma AND 14MA is positive
+ *      Go Short: Close 1 bar ago is above 200MA AND last close is below 200ma AND 14MA is negative
  *      Exits:
  *          Profit target %
  *      Remarks:
- *          These are multi-day trades
+ *          Experiment only entering when 200ma is positive for long, negative for short
  *
  * #8 - Timeframe: 30 minute
  *      30m low is below 200ma and 30m closes above 200ma and previous 30m closed above 200ma
@@ -60,5 +61,28 @@
  *      Remarks:
  *          These are day trades usually
  *          Experiment only entering when 200ma is positive
- *              
+ *
+ * #9 - Timeframe: Daily
+ *      Go Long: VIX Bollinger Bands (period 20, stdev 1.5) are above upper stdev and SPY has a doji candle last bar or current bar
+ *      Go Short: VIX Bollinger Bands (period 20, stdev 1.5) are below lower stdev and SPY has a doji candle last bar or current bar
+ *      Exits:
+ *          Profit target % with trailing stop when first tgt reached
+ *      Remarks:
+ *          Swing trade
+ *        
+ * #10 - Timeframe: Daily and one minute
+ *      Go Long: One minute 6MA had inflection up inside a zone created from a LOD or HOD from a previous day back n days
+ *      Go Short: One minute 6MA had inflection down inside a zone created from a LOD or HOD from a previous day back n days
+ *      Exits:
+ *          Profit target % with trailing stop when first tgt reached
+ *      Remarks:
+ *          Swing trade
+ *
+ * #11 - Timeframe: 30 minutes
+ *      Go Long: RSI period=14, close
+ *      Exits:
+ *          Profit target % with trailing stop when first tgt reached
+ *      Remarks:
+ *          Experiment only entering when 200ma or 100ma are positive
+ *          Day trade
  */
